@@ -1,0 +1,24 @@
+{
+  "name": "cialpa-seguimiento-relevamiento",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tablero seguro de seguimiento del relevamiento escolar CIALPA.",
+  "scripts": {
+    "vendor": "node tools/copy-vendor.mjs",
+    "data": "python tools/export_dashboard.py",
+    "serve": "http-server . -p 4174 -c-1",
+    "test:data": "python tests/test_export_dashboard.py",
+    "test:static": "node tools/validate-static.mjs",
+    "test": "playwright test",
+    "check": "npm run test:data && npm run test:static && npm test"
+  },
+  "dependencies": {
+    "chart.js": "4.4.7",
+    "leaflet": "1.9.4",
+    "lucide": "0.468.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "http-server": "14.1.1"
+  }
+}

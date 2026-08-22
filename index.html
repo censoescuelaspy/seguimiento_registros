@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#103a5e">
+  <meta name="description" content="Seguimiento del relevamiento de infraestructura escolar CIALPA.">
+  <title>CIALPA - Seguimiento del relevamiento</title>
+  <link rel="icon" href="./assets/img/favicon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./assets/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="./assets/css/app.css">
+</head>
+<body>
+  <noscript>Esta aplicación necesita JavaScript para consultar el tablero.</noscript>
+
+  <section class="login-screen" id="login-screen" aria-labelledby="login-title">
+    <div class="login-panel">
+      <div class="login-brand">
+        <img src="./assets/img/logo.png" alt="CIALPA">
+        <div>
+          <span>Relevamiento escolar</span>
+          <strong>Seguimiento operativo</strong>
+        </div>
+      </div>
+      <form class="login-form" id="login-form">
+        <p class="eyebrow">Acceso autorizado</p>
+        <h1 id="login-title">Tablero de seguimiento</h1>
+        <p class="login-copy">Use su cuenta de CIALPA Fotos. El acceso a evidencias respeta el alcance de su equipo.</p>
+        <label for="login-code">Usuario</label>
+        <input id="login-code" name="codigoCensista" autocomplete="username" inputmode="numeric" required>
+        <label for="login-pin">Contraseña</label>
+        <div class="password-field">
+          <input id="login-pin" name="pin" type="password" autocomplete="current-password" required>
+          <button class="icon-button" type="button" id="toggle-password" title="Mostrar contraseña" aria-label="Mostrar contraseña">
+            <i data-lucide="eye" aria-hidden="true"></i>
+          </button>
+        </div>
+        <button class="button button-primary login-submit" type="submit">
+          <i data-lucide="log-in" aria-hidden="true"></i>
+          Ingresar
+        </button>
+        <div class="login-status" id="login-status" role="status" aria-live="polite"></div>
+      </form>
+      <footer>
+        <span id="login-version">Versión 1.0.0</span>
+        <span>Datos institucionales · Evidencias protegidas</span>
+      </footer>
+    </div>
+  </section>
+
+  <div class="app-shell" id="app-shell" hidden>
+    <aside class="sidebar" aria-label="Navegación principal">
+      <div class="sidebar-brand">
+        <img src="./assets/img/logo.png" alt="">
+        <div><strong>CIALPA</strong><span>Seguimiento</span></div>
+      </div>
+      <nav id="main-nav">
+        <button class="nav-button is-active" data-view="overview" aria-current="page">
+          <i data-lucide="layout-dashboard" aria-hidden="true"></i><span>Resumen</span>
+        </button>
+        <button class="nav-button" data-view="map">
+          <i data-lucide="map" aria-hidden="true"></i><span>Mapa</span>
+        </button>
+        <button class="nav-button" data-view="schools">
+          <i data-lucide="school" aria-hidden="true"></i><span>Escuelas</span>
+        </button>
+        <button class="nav-button" data-view="times">
+          <i data-lucide="clock-3" aria-hidden="true"></i><span>Tiempos</span>
+        </button>
+        <button class="nav-button" data-view="evidence">
+          <i data-lucide="images" aria-hidden="true"></i><span>Evidencias</span>
+        </button>
+        <button class="nav-button" data-view="method">
+          <i data-lucide="book-open-check" aria-hidden="true"></i><span>Método</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <span>Edición vigente</span>
+        <strong>v1.0.0</strong>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <button class="icon-button menu-toggle" id="menu-toggle" title="Abrir navegación" aria-label="Abrir navegación">
+          <i data-lucide="menu" aria-hidden="true"></i>
+        </button>
+        <div class="topbar-title">
+          <strong>CIALPA - Seguimiento del relevamiento</strong>
+          <span id="data-cutoff">Cargando corte...</span>
+        </div>
+        <div class="topbar-actions">
+          <span class="demo-badge" id="demo-badge" hidden>SIMULACIÓN</span>
+          <button class="icon-button" id="refresh-data" title="Actualizar datos y evidencias" aria-label="Actualizar datos y evidencias">
+            <i data-lucide="refresh-cw" aria-hidden="true"></i>
+          </button>
+          <div class="user-summary">
+            <span id="user-name">Usuario</span>
+            <strong id="user-role">Rol</strong>
+          </div>
+          <button class="icon-button" id="logout-button" title="Cerrar sesión" aria-label="Cerrar sesión">
+            <i data-lucide="log-out" aria-hidden="true"></i>
+          </button>
+        </div>
+      </header>
+
+      <section class="filterbar" id="filterbar" aria-label="Filtros globales">
+        <label class="search-control" for="filter-search">
+          <i data-lucide="search" aria-hidden="true"></i>
+          <input id="filter-search" type="search" placeholder="Código, escuela, distrito o localidad">
+        </label>
+        <label>
+          <span>Departamento</span>
+          <select id="filter-department"><option value="">Todos</option></select>
+        </label>
+        <label>
+          <span>Distrito</span>
+          <select id="filter-district"><option value="">Todos</option></select>
+        </label>
+        <div class="segmented" id="filter-status" aria-label="Estado del relevamiento">
+          <button type="button" data-status="" class="is-active" aria-pressed="true">Todos</button>
+          <button type="button" data-status="closed" aria-pressed="false">Cerradas</button>
+          <button type="button" data-status="saved" aria-pressed="false">Guardadas</button>
+          <button type="button" data-status="pending" aria-pressed="false">Pendientes</button>
+        </div>
+        <label>
+          <span>Medios</span>
+          <select id="filter-media">
+            <option value="">Todos</option>
+            <option value="with">Con medios</option>
+            <option value="without">Sin medios</option>
+          </select>
+        </label>
+        <button class="icon-button reset-filters" id="reset-filters" title="Restablecer filtros" aria-label="Restablecer filtros">
+          <i data-lucide="list-restart" aria-hidden="true"></i>
+        </button>
+        <output id="filter-count" aria-live="polite">0 escuelas</output>
+      </section>
+
+      <main id="view-root" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <aside class="detail-drawer" id="detail-drawer" aria-labelledby="drawer-title" aria-hidden="true">
+    <header>
+      <div><span class="eyebrow">Escuela seleccionada</span><h2 id="drawer-title">Detalle</h2></div>
+      <button class="icon-button" id="close-drawer" title="Cerrar detalle" aria-label="Cerrar detalle">
+        <i data-lucide="x" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div id="drawer-content"></div>
+  </aside>
+  <button class="drawer-backdrop" id="drawer-backdrop" aria-label="Cerrar detalle" hidden></button>
+
+  <dialog class="photo-dialog" id="photo-dialog" aria-labelledby="photo-dialog-title">
+    <header>
+      <div><span class="eyebrow">Evidencia protegida</span><h2 id="photo-dialog-title">Fotografía</h2></div>
+      <button class="icon-button" id="close-photo" title="Cerrar fotografía" aria-label="Cerrar fotografía">
+        <i data-lucide="x" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="photo-stage" id="photo-stage"></div>
+    <footer id="photo-caption"></footer>
+  </dialog>
+
+  <div class="toast-region" id="toast-region" role="status" aria-live="polite"></div>
+
+  <script src="./assets/vendor/leaflet/leaflet.js"></script>
+  <script src="./assets/vendor/chartjs/chart.umd.js"></script>
+  <script src="./assets/vendor/lucide/lucide.min.js"></script>
+  <script type="module" src="./assets/js/app.js"></script>
+</body>
+</html>
+

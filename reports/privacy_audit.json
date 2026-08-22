@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-08-22T13:48:51-03:00",
+  "schemaVersion": "2026-08-22.1",
+  "status": "PASS",
+  "schools": 49,
+  "forbiddenFindings": [],
+  "checks": [
+    "no_forbidden_keys",
+    "no_windows_paths",
+    "no_private_google_links",
+    "no_email_addresses"
+  ]
+}
