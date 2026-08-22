@@ -27,6 +27,9 @@ Hacer visibles en el tablero las fotos y reportes del plan piloto que existen en
 ### Publicación
 
 - La URL operativa corresponde al repositorio existente `censoescuelaspy/seguimiento_registros`.
+- Commit funcional `10b0888` publicado en `main`; workflows `32588055529` y `32588054491` terminados con exito.
+- URL publica verificada en `1.1.0`: escuela disponible solo en el archivo historico visible, visor PDF operativo y 0 errores de consola en el smoke test.
+- La instantanea publicada confirma 86 escuelas piloto, 29 con medios y 104 evidencias historicas representables en web.
 - El cambio de nombre solicitado a `seguimiento_relevamiento` requiere permisos de propietario sobre la organización y no forma parte de la relación de evidencias.
 
 ## 2026-08-22 - Inicio del tablero 1.0.0
