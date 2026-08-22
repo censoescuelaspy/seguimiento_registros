@@ -33,6 +33,7 @@ export class ApiError extends Error {
 }
 
 const DEMO_PHOTO_ID = 'demo-electric-001';
+const DEMO_PDF_ID = 'archive:demo-report-001';
 let demoAssetPromise = null;
 
 async function demoAssetBase64() {
@@ -50,9 +51,20 @@ async function demoAssetBase64() {
   return demoAssetPromise;
 }
 
+function demoPdfBase64() {
+  const pdf = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF';
+  return btoa(pdf);
+}
+
 function demoRecords() {
   return {
-    schools: [],
+    schools: [
+      {
+        codigo: '15038', codigoRue: '0015038', nombre: 'ESCUELA BÁSICA N° 3620 SAN PEDRO',
+        departamento: 'CAPITAL', distrito: 'ASUNCIÓN', localidad: 'SAN PABLO', zona: 'URBANA',
+        latitud: -25.31, longitud: -57.58
+      }
+    ],
     records: [
       {
         recordKey: 'demo:0012110-B01-P00-E001-H01', recordId: '0012110-B01-P00-E001-H01',
@@ -61,6 +73,13 @@ function demoRecords() {
         estado: 'FINALIZADO', observaciones: 'Registro simulado para validar el tablero.', danosFallas: '',
         cantidadFotos: 2, createdAt: '2026-08-22T09:00:00-03:00', updatedAt: '2026-08-22T10:10:00-03:00',
         startedAt: '2026-08-22T09:00:00-03:00', completedAt: '2026-08-22T10:10:00-03:00', durationSeconds: 4200
+      },
+      {
+        recordKey: 'archive:15038:demo', recordId: 'ARCHIVO-02-EQUIPO-2-15038',
+        codigoEscuela: '15038', codigoRue: '0015038', codigoCensista: '', equipoId: '02 EQUIPO 2',
+        bloque: '', piso: '', espacio: '', tipoEspacio: 'ARCHIVO_HISTORICO', estado: 'ARCHIVO_HISTORICO',
+        observaciones: 'ESCUELA SAN PEDRO', cantidadFotos: 1, createdAt: '2026-08-04T09:00:00-03:00',
+        updatedAt: '2026-08-04T10:00:00-03:00', source: 'ARCHIVO_HISTORICO'
       }
     ],
     photos: [
@@ -79,8 +98,18 @@ function demoRecords() {
         codigoFoto: '0012110-B01-P00-E001-DF02-F02', etiquetaImpresa: true, nombreArchivo: 'dano-simulado.png',
         mimeType: 'image/png', bytes: 65770, capturedAt: '2026-08-22T09:50:00-03:00',
         uploadedAt: '2026-08-22T10:10:00-03:00', estado: 'ACTIVA', notas: 'Daño simulado.'
+      },
+      {
+        fotoId: DEMO_PDF_ID, recordKey: 'archive:15038:demo', recordId: 'ARCHIVO-02-EQUIPO-2-15038',
+        codigoEscuela: '15038', codigoRue: '0015038', codigoCensista: '', tipoFoto: 'ARCHIVO_HISTORICO',
+        tipoElemento: 'REPORTE_PDF', numeroElemento: '1', codigoElemento: 'PDF', secuencia: 1,
+        codigoFoto: 'ARCH-0015038-001', etiquetaImpresa: false, nombreArchivo: 'Escuela San Pedro.pdf',
+        mimeType: 'application/pdf', bytes: 128, capturedAt: '2026-08-04T09:00:00-03:00',
+        uploadedAt: '2026-08-04T10:00:00-03:00', estado: 'ACTIVA', notas: 'Archivo histórico',
+        archivoHistorico: true, esDocumento: true
       }
-    ]
+    ],
+    archiveStatus: { ok: true, groups: 2, schools: 2, files: 3, images: 2, pdfs: 1 }
   };
 }
 
@@ -101,12 +130,13 @@ async function demoRequest(action, payload) {
   }
   if (action === 'listRecords') return demoRecords();
   if (action === 'getPhotoContent') {
-    const base64 = await demoAssetBase64();
+    const isPdfOriginal = payload.fotoId === DEMO_PDF_ID && payload.variant === 'original';
+    const base64 = isPdfOriginal ? demoPdfBase64() : await demoAssetBase64();
     const size = 300000;
     const totalChunks = Math.ceil(base64.length / size);
     const chunkIndex = Number(payload.chunkIndex || 0);
     return {
-      fotoId: payload.fotoId, variant: payload.variant || 'original', mimeType: 'image/png',
+      fotoId: payload.fotoId, variant: payload.variant || 'original', mimeType: isPdfOriginal ? 'application/pdf' : 'image/png',
       bytes: Math.ceil(base64.length * 0.75), chunkIndex, totalChunks,
       chunk: base64.slice(chunkIndex * size, (chunkIndex + 1) * size)
     };
@@ -224,4 +254,3 @@ export class ApiClient {
     return this.request('getPhotoContent', { fotoId, chunkIndex, variant }, { timeout: 90000 });
   }
 }
-

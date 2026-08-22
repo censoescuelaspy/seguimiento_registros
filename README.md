@@ -10,13 +10,15 @@ Tablero web instalable para consultar el avance de infraestructura escolar, expl
 - Mapas: Leaflet con OpenStreetMap y Esri World Imagery.
 - Figuras: Chart.js.
 - Autenticación y fotos: Google Apps Script de CIALPA Fotos.
-- Publicación prevista: `https://censoescuelaspy.github.io/seguimiento_relevamiento/`.
+- Publicación operativa actual: `https://censoescuelaspy.github.io/seguimiento_registros/`.
 
 ## Seguridad
 
 El repositorio contiene una instantánea **sanitizada**: código MEC, nombre y ubicación institucional, estado, conteos y tiempos agregados. Excluye respuestas RUE, usuarios, cédulas, rutas de Drive, URL privadas, hashes de archivos y contenido fotográfico.
 
 El login del frontend no protege archivos estáticos por sí solo. La protección real de fotos y registros corresponde al backend: cada solicitud lleva un token de sesión y Apps Script valida el alcance del usuario. Un administrador ve todo; un supervisor o encuestador ve únicamente lo permitido por su equipo.
+
+La vista **Evidencias** combina las cargas nativas de CIALPA Fotos con el archivo histórico conciliado por código RUE. Incluye imágenes y PDF y conserva visibles las escuelas con evidencia aunque todavía no tengan una ficha en la extracción RUE disponible. Los archivos se solicitan al backend solamente al abrirlos y no forman parte de la instantánea pública.
 
 ## Desarrollo
 

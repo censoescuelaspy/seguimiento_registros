@@ -32,7 +32,7 @@ class DashboardExportTest(unittest.TestCase):
             CREATE TABLE rue_subregistros AS SELECT 1 AS id;
             CREATE TABLE rue_respuestas_unicas AS SELECT 1 AS id;
             CREATE TABLE rue_eventos_tiempo AS SELECT 1 AS id;
-            CREATE TABLE media_archivos AS SELECT 1 AS id;
+            CREATE TABLE media_archivos AS SELECT 1 AS id, 'foto_directa' AS tipo_archivo;
             CREATE TABLE media_imagenes_directas AS SELECT 1 AS id;
             CREATE TABLE media_pdf_documentos AS SELECT 1 AS id;
             CREATE TABLE media_pdf_paginas AS SELECT 1 AS id;
@@ -40,6 +40,10 @@ class DashboardExportTest(unittest.TestCase):
             INSERT INTO actualizaciones VALUES ('2026-08-22T12:00:00-03:00');
             CREATE TABLE media_vinculos_escuela(estado_vinculo VARCHAR);
             INSERT INTO media_vinculos_escuela VALUES ('confirmado');
+            CREATE TABLE catalogo_escuelas_piloto(codigo_mec VARCHAR);
+            INSERT INTO catalogo_escuelas_piloto VALUES ('0000001'), ('0000002');
+            CREATE VIEW v_catalogo_piloto_medios AS
+              SELECT * FROM (VALUES ('0000001', 1), ('0000002', 0)) AS t(codigo_mec, archivos_medios);
             CREATE TABLE rue_tiempos_bloque(codigo_mec VARCHAR,bloque VARCHAR,subregistros_incluidos INTEGER,aulas_incluidas INTEGER,tiempo_en_sesiones_minutos DOUBLE,sesiones_observadas INTEGER,eventos_historial INTEGER);
             INSERT INTO rue_tiempos_bloque VALUES ('0000001','1',10,4,120,1,10);
             CREATE TABLE rue_tiempos_aula(codigo_mec VARCHAR,bloque VARCHAR,planta VARCHAR,numero_aula VARCHAR,etiqueta_aula VARCHAR,tiempo_en_sesiones_minutos DOUBLE,sesiones_observadas INTEGER,eventos_historial INTEGER);
@@ -64,6 +68,8 @@ class DashboardExportTest(unittest.TestCase):
             written = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(written["metrics"]["schools"], 2)
             self.assertEqual(written["metrics"]["closed"], 1)
+            self.assertEqual(written["metrics"]["pilotSchoolsWithMedia"], 1)
+            self.assertEqual(written["metrics"]["viewableHistoricalFiles"], 1)
             self.assertEqual(written["schools"][0]["blocks"][0]["observedMinutes"], 120)
             self.assertEqual(json.loads(audit.read_text(encoding="utf-8"))["status"], "PASS")
             self.assertEqual(EXPORT.privacy_findings(written), [])

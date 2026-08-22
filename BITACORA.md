@@ -1,5 +1,34 @@
 # Bitácora
 
+## 2026-08-22 - Evidencias históricas por escuela 1.1.0
+
+### Objetivo
+
+Hacer visibles en el tablero las fotos y reportes del plan piloto que existen en Drive pero no fueron cargados mediante las hojas `REGISTROS` y `FOTOS` de la app.
+
+### Implementación
+
+- La vista **Evidencias** une las escuelas de la extracción RUE con las escuelas devueltas por el backend autenticado.
+- Las escuelas que solo tienen archivo histórico se muestran como **Sin ficha RUE extraída** y no alteran los indicadores de avance, tiempos ni estados RUE.
+- Se agregó soporte visual para PDF con miniatura, apertura autenticada, visor y descarga.
+- Los filtros de texto, departamento y distrito incluyen también las escuelas con evidencia histórica cuando se consulta esa vista.
+- El aviso de sincronización informa la cobertura real del archivo: escuelas, imágenes y PDF disponibles para la sesión.
+- La instantánea pública incorpora únicamente totales sanitizados: 86 escuelas piloto, 29 con evidencia histórica visible, 19 de ellas con ficha RUE extraída y 104 archivos representables en web.
+- Se incrementó frontend y caché PWA a `1.1.0`; el exportador usa esquema `2026-08-22.2`.
+
+### Validación
+
+- Exportación y pruebas de datos: aprobadas.
+- Validación estática y auditoría de privacidad: `PASS`; no se publicaron rutas locales, identificadores de carpetas ni enlaces privados.
+- Playwright en escritorio y celular: 13 pruebas aprobadas y 1 omisión intencional por no aplicar al escritorio.
+- Cobertura: filtros, mapa, escuela con ficha RUE, escuela solo con archivo histórico, imagen, PDF, accesibilidad y ausencia de desborde horizontal.
+- `npm audit`: 0 vulnerabilidades.
+
+### Publicación
+
+- La URL operativa corresponde al repositorio existente `censoescuelaspy/seguimiento_registros`.
+- El cambio de nombre solicitado a `seguimiento_relevamiento` requiere permisos de propietario sobre la organización y no forma parte de la relación de evidencias.
+
 ## 2026-08-22 - Inicio del tablero 1.0.0
 
 ### Objetivo

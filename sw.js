@@ -1,4 +1,4 @@
-const CACHE = 'cialpa-seguimiento-v1.0.0';
+const CACHE = 'cialpa-seguimiento-v1.1.0';
 const STATIC_ASSETS = [
   './', './index.html', './manifest.webmanifest', './version.json',
   './assets/css/app.css', './assets/js/app.js', './assets/js/api.js', './assets/js/charts.js',
@@ -35,4 +35,3 @@ self.addEventListener('fetch', (event) => {
     return response;
   })));
 });
-

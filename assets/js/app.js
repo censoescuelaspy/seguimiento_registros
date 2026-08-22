@@ -111,19 +111,82 @@ function filteredSchools() {
   return filterSchools(state.snapshot?.schools || [], state.filters);
 }
 
+function archiveSchoolView(school) {
+  const code = normalizeCode(school.codigoRue || school.codigo);
+  const latitude = Number(school.latitud);
+  const longitude = Number(school.longitud);
+  const records = state.remoteIndex.recordsBySchool.get(code) || [];
+  const photos = state.remoteIndex.photosBySchool.get(code) || [];
+  const dates = [
+    ...records.map((record) => record.updatedAt || record.createdAt),
+    ...photos.map((photo) => photo.uploadedAt || photo.capturedAt)
+  ].filter(Boolean).sort();
+  return {
+    code,
+    name: school.nombre || `Escuela MEC ${code}`,
+    department: school.departamento || '',
+    district: school.distrito || '',
+    locality: school.localidad || '',
+    status: 'Sin registro RUE extraído',
+    statusKey: 'archive',
+    startedDate: '',
+    updatedDate: dates.at(-1) || '',
+    firstActivityAt: dates[0] || '',
+    lastActivityAt: dates.at(-1) || '',
+    latitude: school.latitud === '' || !Number.isFinite(latitude) ? null : latitude,
+    longitude: school.longitud === '' || !Number.isFinite(longitude) ? null : longitude,
+    counts: {
+      blocksAndFloors: 0, recreationAreas: 0, classrooms: 0, dependencies: 0,
+      laboratories: 0, workshops: 0, sanitarySpaces: 0, subrecords: 0,
+      uniqueAnswers: 0, events: 0
+    },
+    observedMinutes: 0,
+    observedSessions: 0,
+    media: {
+      folders: records.length,
+      files: photos.length,
+      directPhotos: photos.filter((photo) => photo.mimeType !== 'application/pdf').length,
+      pdfReports: photos.filter((photo) => photo.mimeType === 'application/pdf').length,
+      cadPlans: 0,
+      pdfPages: 0,
+      pdfImageReferences: 0,
+      linkStatus: 'confirmado'
+    },
+    blocks: [],
+    rooms: [],
+    archiveOnly: true
+  };
+}
+
+function allKnownSchools() {
+  const schools = [...(state.snapshot?.schools || [])];
+  const known = new Set(schools.map((school) => school.code));
+  (state.remote.schools || []).forEach((school) => {
+    const code = normalizeCode(school.codigoRue || school.codigo);
+    if (!code || known.has(code)) return;
+    schools.push(archiveSchoolView(school));
+    known.add(code);
+  });
+  return schools;
+}
+
+function filteredEvidenceSchools() {
+  return filterSchools(allKnownSchools(), state.filters);
+}
+
 function findSchool(code) {
   const canonical = normalizeCode(code);
-  return (state.snapshot?.schools || []).find((school) => school.code === canonical) || null;
+  return allKnownSchools().find((school) => school.code === canonical) || null;
 }
 
 function updateFilterCount() {
-  const count = filteredSchools().length;
+  const count = state.view === 'evidence' ? filteredEvidenceSchools().length : filteredSchools().length;
   elements.filterCount.value = `${count} ${count === 1 ? 'escuela' : 'escuelas'}`;
   elements.filterCount.textContent = elements.filterCount.value;
 }
 
 function configureTerritoryFilters() {
-  const schools = state.snapshot?.schools || [];
+  const schools = allKnownSchools();
   const departments = [...new Set(schools.map((school) => school.department))].sort((a, b) => a.localeCompare(b, 'es'));
   elements.filterDepartment.innerHTML = `<option value="">Todos</option>${departments.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('')}`;
   elements.filterDepartment.value = state.filters.department;
@@ -131,7 +194,7 @@ function configureTerritoryFilters() {
 }
 
 function updateDistrictOptions() {
-  const schools = state.snapshot?.schools || [];
+  const schools = allKnownSchools();
   const districts = [...new Set(schools
     .filter((school) => !state.filters.department || school.department === state.filters.department)
     .map((school) => school.district))].sort((a, b) => a.localeCompare(b, 'es'));
@@ -165,6 +228,7 @@ async function refreshEvidence({ quiet = false } = {}) {
     state.remoteIndex = indexRemoteData(state.remote);
     state.remoteError = '';
     state.lastEvidenceRefresh = new Date();
+    configureTerritoryFilters();
     if (state.view === 'evidence') renderView();
     if (state.selectedSchoolCode) renderDrawer();
     if (!quiet) toast('Evidencias actualizadas.');
@@ -486,11 +550,17 @@ function categoryButtons(context = 'view') {
   return `<div class="segmented" data-category-context="${context}" aria-label="Especialidad">${categories.map((category) => `<button type="button" data-category="${category}" class="${state.evidenceCategory === category ? 'is-active' : ''}" aria-pressed="${state.evidenceCategory === category}">${escapeHtml(categoryLabel(category))}</button>`).join('')}</div>`;
 }
 
+function photoMatchesCategory(photo, category = state.evidenceCategory) {
+  if (category === 'all') return true;
+  if (photo.archivoHistorico && categoryForPhoto(photo) === 'other') return true;
+  return categoryForPhoto(photo) === category;
+}
+
 function evidenceCounts(schools) {
   const codes = new Set(schools.map((school) => school.code));
   const records = (state.remote.records || []).filter((record) => codes.has(normalizeCode(record.codigoRue || record.codigoEscuela)));
   let photos = (state.remote.photos || []).filter((photo) => codes.has(normalizeCode(photo.codigoRue || photo.codigoEscuela)));
-  if (state.evidenceCategory !== 'all') photos = photos.filter((photo) => categoryForPhoto(photo) === state.evidenceCategory);
+  photos = photos.filter((photo) => photoMatchesCategory(photo));
   return {
     records,
     photos,
@@ -498,27 +568,35 @@ function evidenceCounts(schools) {
   };
 }
 
-function renderEvidenceView(schools) {
+function renderEvidenceView() {
+  const schools = filteredEvidenceSchools();
   const counts = evidenceCounts(schools);
   const user = state.bootstrap?.user || state.session?.user || {};
   const scope = user.rol === 'ADMIN' ? 'Todas las evidencias' : 'Evidencias de equipos autorizados';
   const linked = schools.filter((school) => school.media.files > 0).length;
+  const archive = state.remote.archiveStatus || {};
+  const archiveNotice = archive.ok
+    ? `<div class="notice notice-success">${icon('archive')}<span>Archivo histórico conectado: ${formatNumber(archive.files)} evidencias (${formatNumber(archive.images)} imágenes y ${formatNumber(archive.pdfs)} PDF) en ${formatNumber(archive.schools)} escuelas autorizadas.</span></div>`
+    : archive.message
+      ? `<div class="notice notice-error">${icon('circle-alert')}<span>${escapeHtml(archive.message)}</span></div>`
+      : '';
   elements.viewRoot.innerHTML = `
-    ${viewHeading('Archivo fotográfico', 'Evidencias por escuela', 'Registros de CIALPA Fotos consultados con autorización del backend; las imágenes no forman parte de este sitio.', `<button class="button button-secondary" data-action="refresh-evidence">${icon('refresh-cw')} Actualizar</button>`)}
+    ${viewHeading('Archivo fotográfico', 'Evidencias por escuela', 'Fotos y reportes históricos consultados con autorización; los archivos privados no forman parte de este sitio.', `<button class="button button-secondary" data-action="refresh-evidence">${icon('refresh-cw')} Actualizar</button>`)}
     ${state.remoteError ? `<div class="notice notice-error">${icon('circle-alert')}<span>${escapeHtml(state.remoteError)}</span></div>` : ''}
+    ${archiveNotice}
     <section class="kpi-grid" aria-label="Indicadores de evidencias">
-      ${kpiCard('Registros autorizados', formatNumber(counts.records.length), scope, 'clipboard-list')}
-      ${kpiCard('Fotos autorizadas', formatNumber(counts.photos.length), categoryLabel(state.evidenceCategory), 'images', 'tone-accent')}
-      ${kpiCard('Escuelas con fotos', formatNumber(counts.schoolsWithPhotos), 'Dentro del acceso actual', 'school')}
-      ${kpiCard('Escuelas con medios RUE', formatNumber(linked), 'Inventario consolidado', 'folder-check')}
+      ${kpiCard('Registros visibles', formatNumber(counts.records.length), scope, 'clipboard-list')}
+      ${kpiCard('Evidencias autorizadas', formatNumber(counts.photos.length), categoryLabel(state.evidenceCategory), 'images', 'tone-accent')}
+      ${kpiCard('Escuelas con evidencias', formatNumber(counts.schoolsWithPhotos), 'Dentro del acceso actual', 'school')}
+      ${kpiCard('Escuelas piloto con medios', formatNumber(state.snapshot.metrics.pilotSchoolsWithMedia || linked), 'Inventario consolidado', 'folder-check')}
       ${kpiCard('Vínculos confirmados', formatNumber(state.snapshot.metrics.linksConfirmed), 'Base maestra', 'link-2', 'tone-closed')}
       ${kpiCard('Vínculos por revisar', formatNumber(state.snapshot.metrics.linksProbable + state.snapshot.metrics.linksUnlinked), 'Probables o aún no vinculados', 'unlink', 'tone-pending')}
     </section>
     <div class="evidence-toolbar">${categoryButtons('view')}<span class="scope-badge">${icon('shield-check', 15)}${escapeHtml(scope)}</span></div>
-    <div class="table-shell"><table class="data-table"><thead><tr><th>Escuela</th><th>Estado RUE</th><th class="numeric">Registros app</th><th class="numeric">Fotos autorizadas</th><th class="numeric">Medios base</th><th>Última actividad</th></tr></thead><tbody>${schools.map((school) => {
+    <div class="table-shell"><table class="data-table"><thead><tr><th>Escuela</th><th>Estado RUE</th><th class="numeric">Registros visibles</th><th class="numeric">Evidencias</th><th class="numeric">Medios inventariados</th><th>Última actividad</th></tr></thead><tbody>${schools.map((school) => {
       const records = state.remoteIndex.recordsBySchool.get(school.code) || [];
       let photos = state.remoteIndex.photosBySchool.get(school.code) || [];
-      if (state.evidenceCategory !== 'all') photos = photos.filter((photo) => categoryForPhoto(photo) === state.evidenceCategory);
+      photos = photos.filter((photo) => photoMatchesCategory(photo));
       return `<tr><td class="school-cell"><button class="row-button" data-open-school="${school.code}"><strong>${escapeHtml(school.name)}</strong><small>MEC ${school.code} · ${escapeHtml(school.district)}</small></button></td><td>${statusPill(school)}</td><td class="numeric">${records.length}</td><td class="numeric"><strong>${photos.length}</strong></td><td class="numeric">${school.media.files}</td><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr>`;
     }).join('')}</tbody></table></div>
     ${schools.length ? '' : emptyState('Sin escuelas visibles', 'Cambie o restablezca los filtros.', 'search-x')}`;
@@ -595,8 +673,8 @@ function renderDrawerSummary(school) {
       <div class="detail-metric"><span>Tiempo observado</span><strong>${escapeHtml(formatMinutes(school.observedMinutes))}</strong></div>
       <div class="detail-metric"><span>Subregistros RUE</span><strong>${formatNumber(school.counts.subrecords)}</strong></div>
       <div class="detail-metric"><span>Respuestas únicas</span><strong>${formatNumber(school.counts.uniqueAnswers)}</strong></div>
-      <div class="detail-metric"><span>Registros app</span><strong>${records.length}</strong></div>
-      <div class="detail-metric"><span>Fotos app</span><strong>${photos.length}</strong></div>
+      <div class="detail-metric"><span>Registros visibles</span><strong>${records.length}</strong></div>
+      <div class="detail-metric"><span>Evidencias</span><strong>${photos.length}</strong></div>
       <div class="detail-metric"><span>Medios vinculados</span><strong>${formatNumber(school.media.files)}</strong></div>
     </div>
     <section class="detail-section"><h3>Infraestructura registrada</h3><div class="detail-metrics">
@@ -605,7 +683,7 @@ function renderDrawerSummary(school) {
     <section class="detail-section"><h3>Fechas y medios</h3><table class="mini-table"><tbody>
       <tr><th>Inicio RUE</th><td>${escapeHtml(formatDate(school.startedDate))}</td></tr><tr><th>Última actividad</th><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr><tr><th>Fotos directas</th><td>${school.media.directPhotos}</td></tr><tr><th>PDF / páginas</th><td>${school.media.pdfReports} / ${formatNumber(school.media.pdfPages)}</td></tr><tr><th>Estado del vínculo</th><td>${escapeHtml(school.media.linkStatus || 'Sin vínculo')}</td></tr>
     </tbody></table></section>
-    <div class="detail-actions"><button class="button button-primary" data-drawer-action="evidence">${icon('images')} Ver evidencias</button><button class="button button-secondary" data-drawer-action="map">${icon('map-pin')} Ubicar en mapa</button><a class="button button-secondary" href="${safeExternalMapUrl(school)}" target="_blank" rel="noopener">${icon('external-link')} Google Maps</a></div>`;
+    <div class="detail-actions"><button class="button button-primary" data-drawer-action="evidence">${icon('images')} Ver evidencias</button>${school.archiveOnly ? '' : `<button class="button button-secondary" data-drawer-action="map">${icon('map-pin')} Ubicar en mapa</button>`}<a class="button button-secondary" href="${safeExternalMapUrl(school)}" target="_blank" rel="noopener">${icon('external-link')} Google Maps</a></div>`;
 }
 
 function renderDrawerTimes(school) {
@@ -618,20 +696,28 @@ function renderDrawerTimes(school) {
 function renderDrawerEvidence(school) {
   const records = state.remoteIndex.recordsBySchool.get(school.code) || [];
   let photos = state.remoteIndex.photosBySchool.get(school.code) || [];
-  if (state.evidenceCategory !== 'all') photos = photos.filter((photo) => categoryForPhoto(photo) === state.evidenceCategory);
+  photos = photos.filter((photo) => photoMatchesCategory(photo));
   const photoIds = new Set(photos.map((photo) => photo.fotoId));
   return `
     <div class="evidence-toolbar">${categoryButtons('drawer')}</div>
-    <div class="detail-metrics"><div class="detail-metric"><span>Registros autorizados</span><strong>${records.length}</strong></div><div class="detail-metric"><span>Fotos visibles</span><strong>${photos.length}</strong></div><div class="detail-metric"><span>Medios base</span><strong>${school.media.files}</strong></div></div>
+    <div class="detail-metrics"><div class="detail-metric"><span>Registros visibles</span><strong>${records.length}</strong></div><div class="detail-metric"><span>Evidencias</span><strong>${photos.length}</strong></div><div class="detail-metric"><span>Medios inventariados</span><strong>${school.media.files}</strong></div></div>
     ${records.length ? records.map((record) => {
       const recordPhotos = (state.remoteIndex.photosByRecord.get(record.recordKey) || []).filter((photo) => photoIds.has(photo.fotoId));
-      return `<section class="record-group"><header><div><h4>${escapeHtml(record.recordId || 'Registro')}</h4><span>Bloque ${escapeHtml(record.bloque)} · Piso ${escapeHtml(record.piso)} · Espacio ${escapeHtml(record.espacio)} · ${escapeHtml(record.tipoEspacio)}</span></div><span>${escapeHtml(record.estado || '')}</span></header>${recordPhotos.length ? `<div class="photo-grid">${recordPhotos.map(renderPhotoCard).join('')}</div>` : emptyState('Sin fotos de esta especialidad', 'El registro existe, pero no tiene evidencias que coincidan con el filtro.', 'image-off')}</section>`;
-    }).join('') : emptyState('Sin registros fotográficos autorizados', 'No existen registros en CIALPA Fotos para esta escuela o su cuenta no tiene acceso.', 'shield-alert')}`;
+      const context = record.source === 'ARCHIVO_HISTORICO'
+        ? `Archivo de campo · ${record.observaciones || 'Sin etiqueta'}`
+        : `Bloque ${record.bloque || '-'} · Piso ${record.piso || '-'} · Espacio ${record.espacio || '-'} · ${record.tipoEspacio || 'Sin tipo'}`;
+      return `<section class="record-group"><header><div><h4>${escapeHtml(record.recordId || 'Registro')}</h4><span>${escapeHtml(context)}</span></div><span>${escapeHtml(record.estado || '')}</span></header>${recordPhotos.length ? `<div class="photo-grid">${recordPhotos.map(renderPhotoCard).join('')}</div>` : emptyState('Sin evidencias de esta especialidad', 'El registro existe, pero no tiene archivos que coincidan con el filtro.', 'image-off')}</section>`;
+    }).join('') : emptyState('Sin evidencias autorizadas', 'No existen archivos para esta escuela o su cuenta no tiene acceso.', 'shield-alert')}`;
 }
 
 function renderPhotoCard(photo) {
+  const isPdf = photo.mimeType === 'application/pdf' || photo.esDocumento;
   const previewUrl = state.photoUrls.get(`${photo.fotoId}:preview`);
-  return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}">${previewUrl ? `<img src="${previewUrl}" alt="Vista previa de ${escapeHtml(photo.codigoFoto || photo.nombreArchivo)}">` : `<button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="preview">${icon('image')} Cargar vista previa</button>`}</div><div class="photo-meta"><strong>${escapeHtml(photo.codigoFoto || photo.codigoElemento || photo.nombreArchivo)}</strong><span>${escapeHtml(photo.tipoElemento || photo.tipoFoto || 'Evidencia')} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span><small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon('expand')} Abrir original</button></div></article>`;
+  const title = photo.archivoHistorico
+    ? photo.nombreArchivo
+    : photo.codigoFoto || photo.codigoElemento || photo.nombreArchivo;
+  const type = isPdf ? 'Reporte PDF histórico' : photo.archivoHistorico ? 'Foto histórica sin clasificar' : photo.tipoElemento || photo.tipoFoto || 'Evidencia';
+  return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}">${previewUrl ? `<img src="${previewUrl}" alt="Vista previa de ${escapeHtml(title)}">` : `<button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="preview">${icon(isPdf ? 'file-text' : 'image')} Cargar vista previa</button>`}</div><div class="photo-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span><small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon(isPdf ? 'file-text' : 'expand')} ${isPdf ? 'Abrir PDF' : 'Abrir imagen'}</button></div></article>`;
 }
 
 function bindCategoryButtons(root) {
@@ -675,14 +761,18 @@ async function loadPhoto(photoId, variant, button) {
       await fetchPhotoUrl(photoId, 'preview');
       renderDrawer();
     } else {
-      elements.photoStage.innerHTML = `<div class="loading-block">${icon('loader-circle')} Cargando fotografía protegida...</div>`;
-      elements.photoCaption.textContent = photo.codigoFoto || photo.nombreArchivo || 'Fotografía';
-      document.getElementById('photo-dialog-title').textContent = photo.tipoElemento || photo.tipoFoto || 'Fotografía';
+      const isPdf = photo.mimeType === 'application/pdf' || photo.esDocumento;
+      elements.photoStage.innerHTML = `<div class="loading-block">${icon('loader-circle')} Cargando evidencia protegida...</div>`;
+      elements.photoCaption.textContent = photo.nombreArchivo || photo.codigoFoto || 'Evidencia';
+      document.getElementById('photo-dialog-title').textContent = isPdf ? 'Reporte PDF' : photo.tipoElemento || photo.tipoFoto || 'Fotografía';
       elements.photoDialog.showModal();
       refreshIcons(elements.photoDialog);
       const url = await fetchPhotoUrl(photoId, 'original');
       state.photoDialogUrl = url;
-      elements.photoStage.innerHTML = `<img src="${url}" alt="${escapeHtml(photo.codigoFoto || photo.nombreArchivo || 'Evidencia fotográfica')}">`;
+      elements.photoStage.innerHTML = isPdf
+        ? `<div class="pdf-stage"><iframe src="${url}" title="${escapeHtml(photo.nombreArchivo || 'Reporte PDF')}"></iframe><a class="button button-primary" href="${url}" target="_blank" rel="noopener" download="${escapeHtml(photo.nombreArchivo || 'reporte.pdf')}">${icon('external-link')} Abrir o descargar PDF</a></div>`
+        : `<img src="${url}" alt="${escapeHtml(photo.codigoFoto || photo.nombreArchivo || 'Evidencia fotográfica')}">`;
+      refreshIcons(elements.photoStage);
     }
   } catch (error) {
     if (variant === 'original' && elements.photoDialog.open) elements.photoDialog.close();

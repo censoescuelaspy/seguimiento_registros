@@ -50,7 +50,12 @@ export function formatDate(value, withTime = false) {
 }
 
 export function statusLabel(key) {
-  return ({ closed: 'Cerrado en campo', saved: 'Guardado en campo', pending: 'Pendiente' })[key] || 'Sin estado';
+  return ({
+    closed: 'Cerrado en campo',
+    saved: 'Guardado en campo',
+    pending: 'Pendiente',
+    archive: 'Sin ficha RUE extraída'
+  })[key] || 'Sin estado';
 }
 
 export function roleLabel(role) {
@@ -93,4 +98,3 @@ export function categoryLabel(category) {
 export function safeExternalMapUrl(school) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${school.latitude},${school.longitude}`)}`;
 }
-

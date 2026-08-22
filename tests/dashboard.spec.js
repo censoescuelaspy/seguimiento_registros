@@ -58,16 +58,30 @@ test('evidencias protegidas por escuela y especialidad', async ({ page }, testIn
   await navigate(page, 'Evidencias');
   await expect(page.getByRole('heading', { name: 'Evidencias por escuela' })).toBeVisible();
   await page.getByRole('button', { name: 'Electricidad', exact: true }).click();
-  await expect(page.locator('.kpi-card').filter({ hasText: 'Fotos autorizadas' }).locator('strong')).toHaveText('1');
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Evidencias autorizadas' }).locator('strong')).toHaveText('2');
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 203 PROFESOR CLETO ROMERO/i }).click();
   await expect(page.getByRole('tab', { name: 'Evidencias' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: 'Cargar vista previa' }).click();
   await expect(page.locator('.photo-preview img')).toBeVisible();
-  await page.getByRole('button', { name: 'Abrir original' }).click();
+  await page.getByRole('button', { name: 'Abrir imagen' }).click();
   await expect(page.locator('#photo-dialog')).toBeVisible();
   await expect(page.locator('#photo-stage img')).toBeVisible();
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-evidence.png`, fullPage: false });
   await page.getByRole('button', { name: 'Cerrar fotografía' }).click();
+});
+
+test('escuela solo en archivo y reporte PDF histórico', async ({ page }) => {
+  await login(page);
+  await navigate(page, 'Evidencias');
+  await expect(page.locator('#filter-count')).toHaveText('50 escuelas');
+  await page.locator('#filter-search').fill('3620 San Pedro');
+  await expect(page.locator('#filter-count')).toHaveText('1 escuela');
+  await page.getByRole('button', { name: /ESCUELA BÁSICA N° 3620 SAN PEDRO/i }).click();
+  await expect(page.locator('#drawer-content .school-identity .status-archive')).toContainText('Sin ficha RUE extraída');
+  await page.getByRole('button', { name: 'Cargar vista previa' }).click();
+  await expect(page.locator('.photo-preview img')).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir PDF' }).click();
+  await expect(page.locator('#photo-stage iframe')).toBeVisible();
 });
 
 test('controles esenciales tienen nombre accesible y no hay identificadores duplicados', async ({ page }) => {

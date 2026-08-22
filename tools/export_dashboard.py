@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "data" / "dashboard.json"
 DEFAULT_AUDIT = Path(__file__).resolve().parents[1] / "reports" / "privacy_audit.json"
 FORBIDDEN_KEYS = {
@@ -359,6 +359,9 @@ def build_snapshot(database: Path) -> dict[str, Any]:
                 item["statusKey"] == "pending" and item["counts"]["events"] == 0 for item in schools
             ),
             "withMedia": sum(item["media"]["files"] > 0 for item in schools),
+            "pilotSchools": scalar(connection, "SELECT COUNT(*) FROM catalogo_escuelas_piloto"),
+            "pilotSchoolsWithMedia": scalar(connection, "SELECT COUNT(*) FROM v_catalogo_piloto_medios WHERE archivos_medios > 0"),
+            "rueSchoolsWithMedia": sum(item["media"]["files"] > 0 for item in schools),
             "observedHours": number(sum(float(item["observedMinutes"] or 0) for item in schools) / 60),
             "closedObservedHours": number(sum(float(item or 0) for item in closed_times) / 60),
             "savedObservedHours": number(sum(float(item or 0) for item in saved_times) / 60),
@@ -366,6 +369,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             "uniqueAnswers": scalar(connection, "SELECT COUNT(*) FROM rue_respuestas_unicas"),
             "events": scalar(connection, "SELECT COUNT(*) FROM rue_eventos_tiempo"),
             "mediaFiles": scalar(connection, "SELECT COUNT(*) FROM media_archivos"),
+            "viewableHistoricalFiles": scalar(connection, "SELECT COUNT(*) FROM media_archivos WHERE tipo_archivo IN ('foto_directa', 'reporte_pdf')"),
             "directPhotos": scalar(connection, "SELECT COUNT(*) FROM media_imagenes_directas"),
             "pdfDocuments": scalar(connection, "SELECT COUNT(*) FROM media_pdf_documentos"),
             "pdfPages": scalar(connection, "SELECT COUNT(*) FROM media_pdf_paginas"),
@@ -386,7 +390,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         }
         metrics["scenarios"] = scenario_metrics(schools, closed_distribution)
         return {
-            "schemaVersion": "2026-08-22.1",
+            "schemaVersion": "2026-08-22.2",
             "appVersion": VERSION,
             "generatedAt": now.isoformat(),
             "cutoff": database_updated_at[:10] if database_updated_at else now.date().isoformat(),
