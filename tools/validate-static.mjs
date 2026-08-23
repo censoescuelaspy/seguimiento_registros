@@ -5,9 +5,10 @@ const required = [
   'index.html', 'manifest.webmanifest', 'sw.js', 'version.json',
   'assets/css/app.css', 'assets/data/dashboard.json',
   'assets/js/app.js', 'assets/js/api.js', 'assets/js/charts.js', 'assets/js/config.js',
-  'assets/js/data.js', 'assets/js/map.js', 'assets/js/utils.js',
+  'assets/js/data.js', 'assets/js/map.js', 'assets/js/pdf-viewer.js', 'assets/js/utils.js',
   'assets/vendor/leaflet/leaflet.css', 'assets/vendor/leaflet/leaflet.js',
-  'assets/vendor/chartjs/chart.umd.js', 'assets/vendor/lucide/lucide.min.js'
+  'assets/vendor/chartjs/chart.umd.js', 'assets/vendor/lucide/lucide.min.js',
+  'assets/vendor/pdfjs/LICENSE', 'assets/vendor/pdfjs/pdf.mjs', 'assets/vendor/pdfjs/pdf.worker.mjs'
 ];
 
 await Promise.all(required.map((file) => access(file)));

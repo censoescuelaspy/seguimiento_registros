@@ -5,7 +5,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
-  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.2.1');
+  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.3.0');
 }
 
 async function navigate(page, name) {
@@ -76,7 +76,7 @@ test('evidencias protegidas por escuela y especialidad', async ({ page }, testIn
   await page.getByRole('button', { name: 'Cerrar fotografía' }).click();
 });
 
-test('escuela solo en archivo y reporte PDF histórico', async ({ page }) => {
+test('escuela solo en archivo y reporte PDF histórico', async ({ page }, testInfo) => {
   await login(page);
   await navigate(page, 'Evidencias');
   await expect(page.locator('#filter-count')).toHaveText('50 escuelas');
@@ -85,8 +85,13 @@ test('escuela solo en archivo y reporte PDF histórico', async ({ page }) => {
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 3620 SAN PEDRO/i }).click();
   await expect(page.locator('#drawer-content .school-identity .status-archive')).toContainText('Sin ficha RUE extraída');
   await expect(page.locator('.photo-preview img')).toBeVisible();
-  await page.getByRole('button', { name: 'Abrir PDF' }).click();
-  await expect(page.locator('#photo-stage iframe')).toBeVisible();
+  await expect(page.locator('.pdf-inventory')).toContainText('2 paginas');
+  await page.getByRole('button', { name: 'Ver laminas' }).click();
+  await expect(page.locator('.pdf-page-grid .pdf-sheet-card')).toHaveCount(2);
+  await expect(page.locator('.pdf-sheet-card canvas').first()).toBeVisible();
+  await page.screenshot({ path: `artifacts/${testInfo.project.name}-pdf-laminas.png`, fullPage: false });
+  await page.getByRole('button', { name: 'Ampliar pagina 1' }).click();
+  await expect(page.locator('.pdf-page-focus canvas')).toBeVisible();
 });
 
 test('controles esenciales tienen nombre accesible y no hay identificadores duplicados', async ({ page }) => {

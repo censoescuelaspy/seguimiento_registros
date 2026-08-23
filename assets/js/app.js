@@ -8,6 +8,7 @@ import { destroyCharts, renderOverviewCharts, renderTimeCharts } from './charts.
 import {
   destroySchoolMap, focusSchool, initSchoolMap, invalidateSchoolMap
 } from './map.js';
+import { renderPdfBrowser } from './pdf-viewer.js';
 import {
   categoryForPhoto, categoryLabel, debounce, escapeHtml, formatBytes, formatDate,
   formatHours, formatMinutes, formatNumber, formatPercent, icon, normalizeCode,
@@ -35,6 +36,7 @@ const state = {
   previewObserver: null,
   mediaGeneration: 0,
   photoDialogUrl: '',
+  photoDialogCleanup: null,
   refreshTimer: null,
   lastEvidenceRefresh: null
 };
@@ -585,8 +587,11 @@ function renderEvidenceView() {
   const scope = user.rol === 'ADMIN' ? 'Todas las evidencias' : 'Evidencias de equipos autorizados';
   const linked = schools.filter((school) => school.media.files > 0).length;
   const archive = state.remote.archiveStatus || {};
+  const pdfDetail = Number(archive.pdfPages || 0)
+    ? ` Los PDF contienen ${formatNumber(archive.pdfPages)} paginas, ${formatNumber(archive.pdfImagePages || 0)} con imagenes y ${formatNumber(archive.pdfImageReferences || 0)} imagenes incrustadas.`
+    : '';
   const archiveNotice = archive.ok
-    ? `<div class="notice notice-success">${icon('archive')}<span>Archivo histórico conectado: ${formatNumber(archive.files)} evidencias (${formatNumber(archive.images)} imágenes y ${formatNumber(archive.pdfs)} PDF) en ${formatNumber(archive.schools)} escuelas autorizadas.</span></div>`
+    ? `<div class="notice notice-success">${icon('archive')}<span>Archivo histórico conectado: ${formatNumber(archive.files)} evidencias (${formatNumber(archive.images)} imágenes y ${formatNumber(archive.pdfs)} PDF) en ${formatNumber(archive.schools)} escuelas autorizadas.${pdfDetail}</span></div>`
     : archive.message
       ? `<div class="notice notice-error">${icon('circle-alert')}<span>${escapeHtml(archive.message)}</span></div>`
       : '';
@@ -734,15 +739,28 @@ function photoTitle(photo) {
     : photo.codigoFoto || photo.codigoElemento || photo.nombreArchivo) || 'Evidencia';
 }
 
+function pdfInventoryLabel(photo) {
+  const pages = Number(photo.documentPages || 0);
+  const imagePages = Number(photo.documentDetectedImagePages || 0);
+  const references = Number(photo.documentImageReferences || 0);
+  if (!pages) return '';
+  const parts = [`${pages} paginas`];
+  if (imagePages) parts.push(`${imagePages} con imagenes`);
+  if (references) parts.push(`${references} imagenes incrustadas`);
+  return parts.join(' · ');
+}
+
 function renderPhotoCard(photo) {
   const isPdf = photo.mimeType === 'application/pdf' || photo.esDocumento;
   const previewUrl = state.photoUrls.get(`${photo.fotoId}:preview`);
   const title = photoTitle(photo);
   const type = isPdf ? 'Reporte PDF histórico' : photo.archivoHistorico ? 'Foto histórica sin clasificar' : photo.tipoElemento || photo.tipoFoto || 'Evidencia';
+  const inventory = isPdf ? pdfInventoryLabel(photo) : '';
   const preview = previewUrl
     ? `<img src="${previewUrl}" alt="Vista previa de ${escapeHtml(title)}" loading="lazy" decoding="async">`
     : `<div class="photo-preview-status" role="status">${icon('loader-circle')}<span>Cargando vista previa...</span></div>`;
-  return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}"${previewUrl ? '' : ` data-auto-preview="${escapeHtml(photo.fotoId)}"`}>${preview}</div><div class="photo-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span><small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon(isPdf ? 'file-text' : 'expand')} ${isPdf ? 'Abrir PDF' : 'Abrir imagen'}</button></div></article>`;
+  const actionLabel = isPdf && photo.documentPages ? 'Ver laminas' : isPdf ? 'Abrir PDF' : 'Abrir imagen';
+  return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}"${previewUrl ? '' : ` data-auto-preview="${escapeHtml(photo.fotoId)}"`}>${preview}</div><div class="photo-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span>${inventory ? `<small class="pdf-inventory">${escapeHtml(inventory)}</small>` : ''}<small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon(isPdf ? 'images' : 'expand')} ${actionLabel}</button></div></article>`;
 }
 
 function bindCategoryButtons(root) {
@@ -850,14 +868,17 @@ async function loadPhoto(photoId, variant, button) {
       const isPdf = photo.mimeType === 'application/pdf' || photo.esDocumento;
       elements.photoStage.innerHTML = `<div class="loading-block">${icon('loader-circle')} Cargando evidencia protegida...</div>`;
       elements.photoCaption.textContent = photo.nombreArchivo || photo.codigoFoto || 'Evidencia';
-      document.getElementById('photo-dialog-title').textContent = isPdf ? 'Reporte PDF' : photo.tipoElemento || photo.tipoFoto || 'Fotografía';
+      document.getElementById('photo-dialog-title').textContent = isPdf ? 'Laminas del reporte PDF' : photo.tipoElemento || photo.tipoFoto || 'Fotografía';
       elements.photoDialog.showModal();
       refreshIcons(elements.photoDialog);
       const url = await fetchPhotoUrl(photoId, 'original');
       state.photoDialogUrl = url;
-      elements.photoStage.innerHTML = isPdf
-        ? `<div class="pdf-stage"><iframe src="${url}" title="${escapeHtml(photo.nombreArchivo || 'Reporte PDF')}"></iframe><a class="button button-primary" href="${url}" target="_blank" rel="noopener" download="${escapeHtml(photo.nombreArchivo || 'reporte.pdf')}">${icon('external-link')} Abrir o descargar PDF</a></div>`
-        : `<img src="${url}" alt="${escapeHtml(photo.codigoFoto || photo.nombreArchivo || 'Evidencia fotográfica')}">`;
+      if (isPdf) {
+        state.photoDialogCleanup?.();
+        state.photoDialogCleanup = await renderPdfBrowser(elements.photoStage, url, photo);
+      } else {
+        elements.photoStage.innerHTML = `<img src="${url}" alt="${escapeHtml(photo.codigoFoto || photo.nombreArchivo || 'Evidencia fotográfica')}">`;
+      }
       refreshIcons(elements.photoStage);
     }
   } catch (error) {
@@ -870,6 +891,8 @@ async function loadPhoto(photoId, variant, button) {
 
 function closePhotoDialog() {
   if (elements.photoDialog.open) elements.photoDialog.close();
+  state.photoDialogCleanup?.();
+  state.photoDialogCleanup = null;
   if (state.photoDialogUrl) {
     URL.revokeObjectURL(state.photoDialogUrl);
     for (const [key, url] of state.photoUrls.entries()) {
@@ -881,6 +904,8 @@ function closePhotoDialog() {
 }
 
 function clearPhotoUrls() {
+  state.photoDialogCleanup?.();
+  state.photoDialogCleanup = null;
   state.mediaGeneration += 1;
   state.photoRequests.clear();
   state.photoUrls.forEach((url) => URL.revokeObjectURL(url));

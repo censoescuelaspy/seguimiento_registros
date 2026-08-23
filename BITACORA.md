@@ -1,5 +1,37 @@
 # Bitácora
 
+## 2026-08-22 - Galería de láminas fotográficas dentro de PDF 1.3.0
+
+### Objetivo
+
+Mostrar automáticamente las páginas con fotografías de cada reporte PDF histórico, en vez de presentar el documento como una sola evidencia sin vista previa navegable.
+
+### Diagnóstico
+
+- El archivo histórico contiene 30 PDF, 2.090 páginas y 6.293 referencias ráster incrustadas.
+- La detección conservadora identifica 3.395 imágenes con tamaño y proporción compatibles con fotografías; una referencia ráster también puede ser un logo, ícono o elemento repetido y por eso no equivale necesariamente a una foto distinta.
+- `Equipo5 Reporte_Escuela la Arboleda.pdf` tiene 66 páginas, 30 páginas con imágenes detectadas, 201 referencias ráster y 197 candidatas a fotografía.
+
+### Implementación
+
+- Se incorporó PDF.js local para renderizar dentro del navegador únicamente las láminas seleccionadas por el índice documental.
+- El visor abre una cuadrícula diferida en escritorio y una columna legible en celular; cada página se puede ampliar y el PDF completo sigue disponible.
+- El archivo se obtiene del backend después de validar la sesión, se representa mediante una URL temporal y no se publica ni se duplica en GitHub Pages.
+- Los metadatos enviados al tablero contienen conteos y números de página, sin rutas locales, nombres de carpetas ni identificadores privados de Drive.
+- Se incrementó frontend y caché PWA a `1.3.0`.
+
+### Validación local
+
+- Base maestra: actualización transaccional `PASS`, con 49 escuelas RUE, 149 archivos y 30 PDF indexados.
+- Exportación sanitizada, auditoría de privacidad y validación estática: `PASS`.
+- Playwright: 13 pruebas aprobadas y 1 omisión intencional en escritorio y celular.
+- Se comprobaron la galería de dos páginas, renderizado no vacío, ampliación, mapa, filtros y ausencia de desbordamiento móvil.
+
+### Estado
+
+- Implementación y validación local completas.
+- Publicación de `1.3.0`: pendiente de este cierre operativo.
+
 ## 2026-08-22 - Vistas previas automáticas de evidencias 1.2.1
 
 ### Objetivo

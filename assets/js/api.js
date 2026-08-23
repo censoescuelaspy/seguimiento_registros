@@ -52,7 +52,36 @@ async function demoAssetBase64() {
 }
 
 function demoPdfBase64() {
-  const pdf = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF';
+  const pageContent = (number) => [
+    'q 0.92 0.95 0.97 rg 54 350 504 330 re f Q',
+    'q 0.20 0.45 0.65 rg 72 520 216 135 re f 306 520 216 135 re f Q',
+    'q 0.85 0.32 0.20 rg 72 370 216 135 re f 306 370 216 135 re f Q',
+    `BT /F1 22 Tf 72 710 Td (Lamina fotografica ${number}) Tj ET`,
+    'BT /F1 12 Tf 72 325 Td (Simulacion sin datos privados) Tj ET'
+  ].join('\n');
+  const first = pageContent(1);
+  const second = pageContent(2);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 5 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${first.length} >>\nstream\n${first}\nendstream`,
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>',
+    `<< /Length ${second.length} >>\nstream\n${second}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return btoa(pdf);
 }
 
@@ -106,7 +135,9 @@ function demoRecords() {
         codigoFoto: 'ARCH-0015038-001', etiquetaImpresa: false, nombreArchivo: 'Escuela San Pedro.pdf',
         mimeType: 'application/pdf', bytes: 128, capturedAt: '2026-08-04T09:00:00-03:00',
         uploadedAt: '2026-08-04T10:00:00-03:00', estado: 'ACTIVA', notas: 'Archivo histórico',
-        archivoHistorico: true, esDocumento: true
+        archivoHistorico: true, esDocumento: true, documentPages: 2,
+        documentImagePages: [1, 2], documentDetectedImagePages: 2,
+        documentImageReferences: 6, documentProbablePhotos: 4, documentPageSelection: 'images'
       }
     ],
     archiveStatus: { ok: true, groups: 2, schools: 2, files: 3, images: 2, pdfs: 1 }
