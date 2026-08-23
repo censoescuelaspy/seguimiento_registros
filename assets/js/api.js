@@ -137,7 +137,9 @@ function demoRecords() {
         uploadedAt: '2026-08-04T10:00:00-03:00', estado: 'ACTIVA', notas: 'Archivo histórico',
         archivoHistorico: true, esDocumento: true, documentPages: 2,
         documentImagePages: [1, 2], documentDetectedImagePages: 2,
-        documentImageReferences: 6, documentProbablePhotos: 4, documentPageSelection: 'images'
+        documentImageReferences: 6, documentProbablePhotos: 4, documentPageSelection: 'images',
+        documentEvidenceIndexed: true,
+        documentEvidenceSummary: { pages: 2, photoPages: 2, photoCount: 4, classifiedCount: 4, reviewCount: 0, blockCount: 1, spaceCount: 2, extractionStatus: 'OK' }
       }
     ],
     archiveStatus: { ok: true, groups: 2, schools: 2, files: 3, images: 2, pdfs: 1 }
@@ -170,6 +172,22 @@ async function demoRequest(action, payload) {
       fotoId: payload.fotoId, variant: payload.variant || 'original', mimeType: isPdfOriginal ? 'application/pdf' : 'image/png',
       bytes: Math.ceil(base64.length * 0.75), chunkIndex, totalChunks,
       chunk: base64.slice(chunkIndex * size, (chunkIndex + 1) * size)
+    };
+  }
+  if (action === 'getPdfEvidenceIndex') {
+    if (payload.fotoId !== DEMO_PDF_ID) throw new ApiError('Reporte simulado no encontrado.', 'PDF_NOT_FOUND');
+    return {
+      fotoId: DEMO_PDF_ID,
+      schemaVersion: '2026-08-23.1',
+      pipelineVersion: '1.0.0',
+      generatedAt: '2026-08-23T08:00:00-03:00',
+      summary: { pages: 2, photoPages: 2, photoCount: 4, classifiedCount: 4, reviewCount: 0, blockCount: 1, spaceCount: 2, extractionStatus: 'OK' },
+      photos: [
+        { id: 'demo-pdf-1', page: 1, ordinal: 1, photoNumber: 1, sectionLabel: 'B1 PB Aula1', cardLabel: 'B1A1 Foto 1', elementLabel: '', block: '1', floor: 'PB', spaceType: 'AULA', spaceNumber: '1', spaceLabel: 'Aula 1', bbox: [0.10, 0.18, 0.47, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' },
+        { id: 'demo-pdf-2', page: 1, ordinal: 2, photoNumber: 2, sectionLabel: 'B1 PB Aula1', cardLabel: 'B1A1 Foto 2', elementLabel: 'Tablero electrico', block: '1', floor: 'PB', spaceType: 'AULA', spaceNumber: '1', spaceLabel: 'Aula 1', bbox: [0.52, 0.18, 0.89, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' },
+        { id: 'demo-pdf-3', page: 2, ordinal: 1, photoNumber: 1, sectionLabel: 'B1 PB Sanitario1', cardLabel: 'B1S1 Foto 1', elementLabel: 'Inodoro', block: '1', floor: 'PB', spaceType: 'SANITARIO', spaceNumber: '1', spaceLabel: 'Sanitario 1', bbox: [0.10, 0.18, 0.47, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' },
+        { id: 'demo-pdf-4', page: 2, ordinal: 2, photoNumber: 2, sectionLabel: 'B1 PB Sanitario1', cardLabel: 'B1S1 Foto 2', elementLabel: 'Lavamanos', block: '1', floor: 'PB', spaceType: 'SANITARIO', spaceNumber: '1', spaceLabel: 'Sanitario 1', bbox: [0.52, 0.18, 0.89, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' }
+      ]
     };
   }
   throw new ApiError('Acción demo no implementada.', 'DEMO_ACTION_MISSING');
@@ -283,5 +301,8 @@ export class ApiClient {
   listRecords(filters = {}) { return this.request('listRecords', filters); }
   getPhotoContent(fotoId, chunkIndex = 0, variant = 'original') {
     return this.request('getPhotoContent', { fotoId, chunkIndex, variant }, { timeout: 90000 });
+  }
+  getPdfEvidenceIndex(fotoId) {
+    return this.request('getPdfEvidenceIndex', { fotoId }, { timeout: 90000 });
   }
 }

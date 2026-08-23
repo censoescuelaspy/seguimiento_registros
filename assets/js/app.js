@@ -8,7 +8,7 @@ import { destroyCharts, renderOverviewCharts, renderTimeCharts } from './charts.
 import {
   destroySchoolMap, focusSchool, initSchoolMap, invalidateSchoolMap
 } from './map.js';
-import { renderPdfBrowser } from './pdf-viewer.js';
+import { renderPdfBrowser, renderPdfEvidenceThumbnails } from './pdf-viewer.js';
 import {
   categoryForPhoto, categoryLabel, debounce, escapeHtml, formatBytes, formatDate,
   formatHours, formatMinutes, formatNumber, formatPercent, icon, normalizeCode,
@@ -37,6 +37,10 @@ const state = {
   mediaGeneration: 0,
   photoDialogUrl: '',
   photoDialogCleanup: null,
+  pdfEvidenceIndexes: new Map(),
+  pdfEvidenceErrors: new Map(),
+  pdfEvidenceLoading: new Set(),
+  evidenceThumbnailCleanups: [],
   refreshTimer: null,
   lastEvidenceRefresh: null
 };
@@ -239,6 +243,8 @@ async function refreshEvidence({ quiet = false } = {}) {
     state.remoteIndex = indexRemoteData(state.remote);
     state.remoteError = '';
     state.lastEvidenceRefresh = new Date();
+    state.pdfEvidenceIndexes.clear();
+    state.pdfEvidenceErrors.clear();
     configureTerritoryFilters();
     if (state.view === 'evidence') renderView();
     if (state.selectedSchoolCode) renderDrawer();
@@ -338,6 +344,9 @@ async function logout(callServer = true) {
   state.bootstrap = null;
   state.remote = { records: [], photos: [], schools: [] };
   state.remoteIndex = indexRemoteData();
+  state.pdfEvidenceIndexes.clear();
+  state.pdfEvidenceErrors.clear();
+  state.pdfEvidenceLoading.clear();
   showLogin('Sesión cerrada.');
 }
 
@@ -664,6 +673,7 @@ function openSchool(code, tab = state.drawerTab || 'summary') {
 function renderDrawer() {
   const school = findSchool(state.selectedSchoolCode);
   if (!school) return;
+  clearEvidenceThumbnailRenders();
   elements.drawerTitle.textContent = school.name;
   elements.drawerContent.innerHTML = `
     <div class="drawer-tabs" role="tablist">
@@ -686,6 +696,10 @@ function renderDrawer() {
   bindPhotoButtons();
   bindAutomaticPreviews();
   refreshIcons(elements.drawerContent);
+  if (state.drawerTab === 'evidence') {
+    ensureSchoolPdfEvidence(school);
+    startPdfEvidenceThumbnails(school);
+  }
 }
 
 function renderDrawerSummary(school) {
@@ -716,21 +730,156 @@ function renderDrawerTimes(school) {
     <section class="detail-section"><h3>Tiempos por aula</h3>${school.rooms.length ? `<div class="table-shell"><table class="mini-table"><thead><tr><th>Bloque</th><th>Planta / aula</th><th>Tiempo</th></tr></thead><tbody>${school.rooms.map((item) => `<tr><td>${escapeHtml(item.block || '-')}</td><td>${escapeHtml([item.floor, item.roomLabel || item.roomNumber].filter(Boolean).join(' / ') || '-')}</td><td>${escapeHtml(formatMinutes(item.observedMinutes))}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Sin tiempos por aula', 'El historial no permite estimar aulas en esta escuela.', 'clock-alert')}</section>`;
 }
 
+function isPdfDocument(photo) {
+  return photo?.mimeType === 'application/pdf' || photo?.esDocumento;
+}
+
+function evidenceBlockLabel(value) {
+  return value ? `Bloque ${value}` : 'Sin bloque identificado';
+}
+
+function evidenceFloorLabel(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (['0', 'PB', 'P0', 'BAJA', 'PLANTA BAJA'].includes(normalized)) return 'Planta baja';
+  if (['PA', 'ALTA', 'PLANTA ALTA'].includes(normalized)) return 'Planta alta';
+  if (/^P?\d+$/.test(normalized)) return `Piso ${normalized.replace(/^P/, '')}`;
+  return value ? String(value) : 'Sin piso identificado';
+}
+
+function directSpaceLabel(record) {
+  const type = String(record.tipoEspacio || 'Espacio').replaceAll('_', ' ');
+  return record.espacio ? `${type} ${record.espacio}` : type;
+}
+
+function pdfEvidenceMatchesCategory(photo) {
+  if (state.evidenceCategory === 'all') return true;
+  const descriptor = `${photo.elementLabel || ''} ${photo.spaceType || ''} ${photo.spaceLabel || ''}`;
+  return categoryForPhoto({ tipoElemento: descriptor, tipoFoto: descriptor }) === state.evidenceCategory;
+}
+
+function evidenceSortValue(value) {
+  const match = String(value || '').match(/\d+/);
+  return match ? Number(match[0]) : 9999;
+}
+
+function evidenceSpaceKey(type, number, label) {
+  const normalizedType = String(type || 'ESPACIO').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+  const normalizedNumber = String(number || '').replace(/\D+/g, '');
+  const normalizedLabel = String(label || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, '_');
+  return `${normalizedType}:${normalizedNumber || normalizedLabel || 'GENERAL'}`;
+}
+
+function buildEvidenceHierarchy(records, visiblePhotos, pdfDocuments) {
+  const blocks = new Map();
+  const visibleIds = new Set(visiblePhotos.map((photo) => photo.fotoId));
+
+  const addSpace = (blockValue, floorValue, spaceKey, spaceLabel, spaceType, item) => {
+    const blockKey = String(blockValue || '');
+    const floorKey = String(floorValue || '');
+    if (!blocks.has(blockKey)) blocks.set(blockKey, { key: blockKey, label: evidenceBlockLabel(blockValue), floors: new Map() });
+    const block = blocks.get(blockKey);
+    if (!block.floors.has(floorKey)) block.floors.set(floorKey, { key: floorKey, label: evidenceFloorLabel(floorValue), spaces: new Map() });
+    const floor = block.floors.get(floorKey);
+    if (!floor.spaces.has(spaceKey)) floor.spaces.set(spaceKey, { key: spaceKey, label: spaceLabel, type: spaceType, items: [] });
+    if (item) floor.spaces.get(spaceKey).items.push(item);
+  };
+
+  records.filter((record) => record.source !== 'ARCHIVO_HISTORICO').forEach((record) => {
+    const recordPhotos = (state.remoteIndex.photosByRecord.get(record.recordKey) || [])
+      .filter((photo) => visibleIds.has(photo.fotoId));
+    if (!recordPhotos.length && state.evidenceCategory !== 'all') return;
+    const spaceKey = evidenceSpaceKey(record.tipoEspacio, record.espacio, directSpaceLabel(record));
+    addSpace(record.bloque, record.piso, spaceKey, directSpaceLabel(record), record.tipoEspacio || 'ESPACIO', null);
+    recordPhotos.forEach((photo) => addSpace(
+      record.bloque,
+      record.piso,
+      spaceKey,
+      directSpaceLabel(record),
+      record.tipoEspacio || 'ESPACIO',
+      { kind: 'direct', photo }
+    ));
+  });
+
+  pdfDocuments.forEach((documentPhoto) => {
+    const index = state.pdfEvidenceIndexes.get(documentPhoto.fotoId);
+    (index?.photos || []).filter(pdfEvidenceMatchesCategory).forEach((photo) => {
+      const spaceKey = evidenceSpaceKey(photo.spaceType, photo.spaceNumber, photo.spaceLabel);
+      addSpace(
+        photo.block,
+        photo.floor,
+        spaceKey,
+        photo.spaceLabel || photo.sectionLabel || 'Espacio sin etiqueta',
+        photo.spaceType || 'OTRO_ESPACIO',
+        { kind: 'pdf', photo, documentPhoto }
+      );
+    });
+  });
+
+  return [...blocks.values()]
+    .sort((left, right) => evidenceSortValue(left.key) - evidenceSortValue(right.key) || left.label.localeCompare(right.label))
+    .map((block) => ({
+      ...block,
+      floors: [...block.floors.values()]
+        .sort((left, right) => evidenceSortValue(left.key) - evidenceSortValue(right.key) || left.label.localeCompare(right.label))
+        .map((floor) => ({
+          ...floor,
+          spaces: [...floor.spaces.values()].sort((left, right) => left.label.localeCompare(right.label))
+        }))
+    }));
+}
+
+function renderPdfEvidencePhoto(item) {
+  const { photo, documentPhoto } = item;
+  const title = `Foto ${photo.photoNumber || photo.ordinal || ''}`.trim();
+  const detail = photo.elementLabel || photo.cardLabel || photo.sectionLabel || 'Sin rótulo adicional';
+  const rueBadge = photo.rueStatus === 'CONFIRMADO'
+    ? '<span class="evidence-link-badge is-confirmed">Coincide con RUE</span>'
+    : photo.rueStatus === 'PROBABLE_REVISAR' || photo.needsReview
+      ? '<span class="evidence-link-badge is-review">Revisar relación</span>'
+      : '';
+  return `<button class="evidence-crop-card" type="button" data-pdf-evidence-photo data-pdf-document-id="${escapeHtml(documentPhoto.fotoId)}" data-pdf-page="${photo.page}" data-pdf-bbox="${escapeHtml(JSON.stringify(photo.bbox || []))}" data-pdf-label="${escapeHtml(`${title} - ${photo.spaceLabel || photo.sectionLabel || ''}`)}"><span class="evidence-crop-media"><canvas aria-hidden="true"></canvas><small data-crop-status>Cargando recorte...</small></span><span class="evidence-crop-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span><small>PDF · página ${photo.page}</small>${rueBadge}</span></button>`;
+}
+
+function renderEvidenceHierarchy(blocks, pdfDocuments) {
+  const loading = pdfDocuments.some((photo) => state.pdfEvidenceLoading.has(photo.fotoId));
+  const missing = pdfDocuments.filter((photo) => !state.pdfEvidenceIndexes.has(photo.fotoId) && !state.pdfEvidenceErrors.has(photo.fotoId));
+  const errors = pdfDocuments.map((photo) => state.pdfEvidenceErrors.get(photo.fotoId)).filter(Boolean);
+  const indexedPhotos = pdfDocuments.reduce((total, photo) => total + Number(state.pdfEvidenceIndexes.get(photo.fotoId)?.summary?.photoCount || 0), 0);
+  const status = loading || missing.length
+    ? `<div class="notice">${icon('loader-circle')}<span>Organizando las fotos del PDF por bloque, piso y espacio...</span></div>`
+    : errors.length
+      ? `<div class="notice notice-warning">${icon('triangle-alert')}<span>${escapeHtml(errors[0])} El reporte completo sigue disponible abajo.</span></div>`
+      : pdfDocuments.length
+        ? `<div class="notice notice-success">${icon('list-tree')}<span>${formatNumber(indexedPhotos)} fotos PDF organizadas por su rótulo visible.</span></div>`
+        : '';
+  if (!blocks.length) {
+    return `${status}${loading || missing.length ? '' : emptyState('Sin fotos clasificadas', 'No hay evidencias asociadas a bloques o espacios para este filtro.', 'image-off')}`;
+  }
+  return `${status}<div class="evidence-tree">${blocks.map((block, blockIndex) => {
+    const blockPhotos = block.floors.reduce((total, floor) => total + floor.spaces.reduce((subtotal, space) => subtotal + space.items.length, 0), 0);
+    const blockSpaces = block.floors.reduce((total, floor) => total + floor.spaces.length, 0);
+    return `<details class="evidence-block" ${blockIndex === 0 ? 'open' : ''}><summary><span>${icon('building-2')}<strong>${escapeHtml(block.label)}</strong></span><small>${blockSpaces} espacios · ${blockPhotos} fotos</small></summary><div class="evidence-block-body">${block.floors.map((floor, floorIndex) => `<section class="evidence-floor"><h5>${escapeHtml(floor.label)}</h5>${floor.spaces.map((space, spaceIndex) => {
+      const confirmed = space.items.some((item) => item.kind === 'pdf' && item.photo.rueStatus === 'CONFIRMADO');
+      return `<details class="evidence-space" ${blockIndex === 0 && floorIndex === 0 && spaceIndex === 0 ? 'open' : ''}><summary><span><strong>${escapeHtml(space.label)}</strong><small>${escapeHtml(String(space.type || '').replaceAll('_', ' '))}</small></span><span>${space.items.length} fotos${confirmed ? ' · RUE' : ''}</span></summary><div class="evidence-space-photos">${space.items.length ? space.items.map((item) => item.kind === 'pdf' ? renderPdfEvidencePhoto(item) : renderPhotoCard(item.photo)).join('') : emptyState('Espacio sin fotos', 'El registro existe, pero no tiene evidencia fotográfica sincronizada.', 'image-off')}</div></details>`;
+    }).join('')}</section>`).join('')}</div></details>`;
+  }).join('')}</div>`;
+}
+
 function renderDrawerEvidence(school) {
   const records = state.remoteIndex.recordsBySchool.get(school.code) || [];
-  let photos = state.remoteIndex.photosBySchool.get(school.code) || [];
-  photos = photos.filter((photo) => photoMatchesCategory(photo));
-  const photoIds = new Set(photos.map((photo) => photo.fotoId));
+  const allPhotos = state.remoteIndex.photosBySchool.get(school.code) || [];
+  const photos = allPhotos.filter((photo) => photoMatchesCategory(photo));
+  const pdfDocuments = allPhotos.filter(isPdfDocument);
+  const hierarchy = buildEvidenceHierarchy(records, photos, pdfDocuments);
+  const sourceFiles = photos.filter((photo) => photo.archivoHistorico);
+  const indexedCount = pdfDocuments.reduce((total, photo) => total + Number(state.pdfEvidenceIndexes.get(photo.fotoId)?.summary?.photoCount || photo.documentEvidenceSummary?.photoCount || 0), 0);
+  const pdfRueLinked = pdfDocuments.reduce((total, documentPhoto) => total + (state.pdfEvidenceIndexes.get(documentPhoto.fotoId)?.photos || []).filter((photo) => photo.rueStatus === 'CONFIRMADO').length, 0);
   return `
     <div class="evidence-toolbar">${categoryButtons('drawer')}</div>
-    <div class="detail-metrics"><div class="detail-metric"><span>Registros visibles</span><strong>${records.length}</strong></div><div class="detail-metric"><span>Evidencias</span><strong>${photos.length}</strong></div><div class="detail-metric"><span>Fotos vinculadas RUE</span><strong>${school.media.photoLinksConfirmed || 0}</strong></div><div class="detail-metric"><span>Medios inventariados</span><strong>${school.media.files}</strong></div></div>
-    ${records.length ? records.map((record) => {
-      const recordPhotos = (state.remoteIndex.photosByRecord.get(record.recordKey) || []).filter((photo) => photoIds.has(photo.fotoId));
-      const context = record.source === 'ARCHIVO_HISTORICO'
-        ? `Archivo de campo · ${record.observaciones || 'Sin etiqueta'}`
-        : `Bloque ${record.bloque || '-'} · Piso ${record.piso || '-'} · Espacio ${record.espacio || '-'} · ${record.tipoEspacio || 'Sin tipo'}`;
-      return `<section class="record-group"><header><div><h4>${escapeHtml(record.recordId || 'Registro')}</h4><span>${escapeHtml(context)}</span></div><span>${escapeHtml(record.estado || '')}</span></header>${recordPhotos.length ? `<div class="photo-grid">${recordPhotos.map(renderPhotoCard).join('')}</div>` : emptyState('Sin evidencias de esta especialidad', 'El registro existe, pero no tiene archivos que coincidan con el filtro.', 'image-off')}</section>`;
-    }).join('') : emptyState('Sin evidencias autorizadas', 'No existen archivos para esta escuela o su cuenta no tiene acceso.', 'shield-alert')}`;
+    <div class="detail-metrics"><div class="detail-metric"><span>Registros visibles</span><strong>${records.length}</strong></div><div class="detail-metric"><span>Fotos identificadas</span><strong>${formatNumber(indexedCount + photos.filter((photo) => !isPdfDocument(photo)).length)}</strong></div><div class="detail-metric"><span>Fotos vinculadas RUE</span><strong>${formatNumber((school.media.photoLinksConfirmed || 0) + pdfRueLinked)}</strong></div><div class="detail-metric"><span>Medios inventariados</span><strong>${school.media.files}</strong></div></div>
+    <section class="detail-section evidence-hierarchy"><div class="section-title-row"><div><h3>Bloques, aulas y espacios</h3><p>Organización obtenida de los registros y de los rótulos visibles dentro de cada PDF.</p></div>${icon('list-tree')}</div>${renderEvidenceHierarchy(hierarchy, pdfDocuments)}</section>
+    ${sourceFiles.length ? `<section class="detail-section"><div class="section-title-row"><div><h3>Reportes y archivos originales</h3><p>Abra la fuente completa para verificar cualquier asociación.</p></div>${icon('file-check-2')}</div><div class="photo-grid">${sourceFiles.map(renderPhotoCard).join('')}</div></section>` : ''}
+    ${!records.length && !sourceFiles.length ? emptyState('Sin evidencias autorizadas', 'No existen archivos para esta escuela o su cuenta no tiene acceso.', 'shield-alert') : ''}`;
 }
 
 function photoTitle(photo) {
@@ -743,10 +892,13 @@ function pdfInventoryLabel(photo) {
   const pages = Number(photo.documentPages || 0);
   const imagePages = Number(photo.documentDetectedImagePages || 0);
   const references = Number(photo.documentImageReferences || 0);
+  const evidence = photo.documentEvidenceSummary || null;
   if (!pages) return '';
   const parts = [`${pages} paginas`];
   if (imagePages) parts.push(`${imagePages} con imagenes`);
   if (references) parts.push(`${references} imagenes incrustadas`);
+  if (evidence?.photoCount) parts.push(`${evidence.photoCount} fotos identificadas`);
+  if (evidence?.spaceCount) parts.push(`${evidence.spaceCount} espacios`);
   return parts.join(' · ');
 }
 
@@ -761,6 +913,53 @@ function renderPhotoCard(photo) {
     : `<div class="photo-preview-status" role="status">${icon('loader-circle')}<span>Cargando vista previa...</span></div>`;
   const actionLabel = isPdf && photo.documentPages ? 'Ver laminas' : isPdf ? 'Abrir PDF' : 'Abrir imagen';
   return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}"${previewUrl ? '' : ` data-auto-preview="${escapeHtml(photo.fotoId)}"`}>${preview}</div><div class="photo-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span>${inventory ? `<small class="pdf-inventory">${escapeHtml(inventory)}</small>` : ''}<small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon(isPdf ? 'images' : 'expand')} ${actionLabel}</button></div></article>`;
+}
+
+function clearEvidenceThumbnailRenders() {
+  state.evidenceThumbnailCleanups.forEach((cleanup) => cleanup?.());
+  state.evidenceThumbnailCleanups = [];
+}
+
+async function ensureSchoolPdfEvidence(school) {
+  const documents = (state.remoteIndex.photosBySchool.get(school.code) || []).filter(isPdfDocument);
+  const pending = documents.filter((photo) => (
+    !state.pdfEvidenceIndexes.has(photo.fotoId)
+    && !state.pdfEvidenceErrors.has(photo.fotoId)
+    && !state.pdfEvidenceLoading.has(photo.fotoId)
+  ));
+  if (!pending.length) return;
+  pending.forEach((photo) => state.pdfEvidenceLoading.add(photo.fotoId));
+  await Promise.all(pending.map(async (photo) => {
+    try {
+      const index = await api.getPdfEvidenceIndex(photo.fotoId);
+      state.pdfEvidenceIndexes.set(photo.fotoId, index);
+    } catch (error) {
+      state.pdfEvidenceErrors.set(photo.fotoId, error.message || 'No se pudo clasificar este reporte.');
+    } finally {
+      state.pdfEvidenceLoading.delete(photo.fotoId);
+    }
+  }));
+  if (state.selectedSchoolCode === school.code && state.drawerTab === 'evidence') renderDrawer();
+}
+
+async function startPdfEvidenceThumbnails(school) {
+  const documents = (state.remoteIndex.photosBySchool.get(school.code) || [])
+    .filter((photo) => isPdfDocument(photo) && state.pdfEvidenceIndexes.has(photo.fotoId));
+  for (const documentPhoto of documents) {
+    if (!elements.drawerContent.querySelector(`[data-pdf-document-id="${CSS.escape(documentPhoto.fotoId)}"]`)) continue;
+    try {
+      const url = await fetchPhotoUrl(documentPhoto.fotoId, 'original');
+      if (state.selectedSchoolCode !== school.code || state.drawerTab !== 'evidence') return;
+      const cleanup = renderPdfEvidenceThumbnails(elements.drawerContent, url, {
+        documentId: documentPhoto.fotoId,
+        root: elements.drawer,
+        onOpen: (focus, button) => loadPhoto(documentPhoto.fotoId, 'original', button, focus)
+      });
+      state.evidenceThumbnailCleanups.push(cleanup);
+    } catch (error) {
+      state.pdfEvidenceErrors.set(documentPhoto.fotoId, error.message || 'No se pudieron cargar las miniaturas.');
+    }
+  }
 }
 
 function bindCategoryButtons(root) {
@@ -859,7 +1058,7 @@ async function fetchPhotoUrl(photoId, variant) {
   }
 }
 
-async function loadPhoto(photoId, variant, button) {
+async function loadPhoto(photoId, variant, button, pdfFocus = null) {
   const photo = (state.remote.photos || []).find((item) => item.fotoId === photoId);
   if (!photo) return;
   setBusy(button, true);
@@ -875,7 +1074,12 @@ async function loadPhoto(photoId, variant, button) {
       state.photoDialogUrl = url;
       if (isPdf) {
         state.photoDialogCleanup?.();
-        state.photoDialogCleanup = await renderPdfBrowser(elements.photoStage, url, photo);
+        state.photoDialogCleanup = await renderPdfBrowser(elements.photoStage, url, {
+          ...photo,
+          documentInitialPage: pdfFocus?.page || 0,
+          documentInitialCrop: pdfFocus?.bbox || null,
+          documentInitialLabel: pdfFocus?.label || ''
+        });
       } else {
         elements.photoStage.innerHTML = `<img src="${url}" alt="${escapeHtml(photo.codigoFoto || photo.nombreArchivo || 'Evidencia fotográfica')}">`;
       }
@@ -904,6 +1108,7 @@ function closePhotoDialog() {
 }
 
 function clearPhotoUrls() {
+  clearEvidenceThumbnailRenders();
   state.photoDialogCleanup?.();
   state.photoDialogCleanup = null;
   state.mediaGeneration += 1;
@@ -915,6 +1120,7 @@ function clearPhotoUrls() {
 
 function closeDrawer() {
   disconnectPreviewObserver();
+  clearEvidenceThumbnailRenders();
   elements.drawer.classList.remove('is-open');
   elements.drawer.setAttribute('aria-hidden', 'true');
   elements.drawerBackdrop.hidden = true;

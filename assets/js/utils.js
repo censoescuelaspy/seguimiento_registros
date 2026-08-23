@@ -81,10 +81,10 @@ export function debounce(callback, wait = 180) {
 
 export function categoryForPhoto(photo = {}) {
   const value = `${photo.tipoElemento || ''} ${photo.tipoFoto || ''}`.toUpperCase();
-  if (/LUZ|LUMIN|INTERRUPTOR|TOMA|TABLERO|ELECTR|VENTILADOR|AIRE/.test(value)) return 'electric';
-  if (/INODORO|LAVAMANOS|URINARIO|DUCHA|AGUA|DESAG|SANIT/.test(value)) return 'sanitary';
-  if (/DA[ÑN]O|FALLA|FISURA|HUMEDAD|ROTURA/.test(value)) return 'damage';
-  if (/PARED|TABIQUE|PUERTA|VENTANA|PILAR|ESCALERA|RAMPA|ARQUIT/.test(value)) return 'architecture';
+  if (/LUZ|LUMIN|INTERRUPTOR|TOMA|TABLERO|ELECTR|VENTILADOR|AIRE|BREAKER|LIGHT|SWITCH|OUTLET|FAN/.test(value)) return 'electric';
+  if (/INODORO|LAVAMANOS|URINARIO|DUCHA|AGUA|DESAG|SANIT|TOILET|SINK|SHOWER|DRAIN|SSHH/.test(value)) return 'sanitary';
+  if (/DA[ÑN]O|FALLA|FISURA|HUMEDAD|ROTURA|DAMAGE|CRACK|LEAK/.test(value)) return 'damage';
+  if (/PARED|TABIQUE|PUERTA|VENTANA|PILAR|ESCALERA|RAMPA|ARQUIT|AULA|BLOQUE|WALL|DOOR|WINDOW|STAIR|RAMP/.test(value)) return 'architecture';
   return 'other';
 }
 

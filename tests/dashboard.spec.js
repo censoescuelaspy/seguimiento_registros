@@ -5,7 +5,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
-  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.3.0');
+  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.4.0');
 }
 
 async function navigate(page, name) {
@@ -66,6 +66,7 @@ test('evidencias protegidas por escuela y especialidad', async ({ page }, testIn
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 203 PROFESOR CLETO ROMERO/i }).click();
   await expect(page.getByRole('tab', { name: 'Evidencias' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#drawer-content .detail-metric').filter({ hasText: 'Fotos vinculadas RUE' }).locator('strong')).toHaveText('74');
+  await page.locator('.photo-preview').scrollIntoViewIfNeeded();
   await expect(page.locator('.photo-preview img')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cargar vista previa' })).toHaveCount(0);
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-evidence-preview.png`, fullPage: false });
@@ -84,8 +85,19 @@ test('escuela solo en archivo y reporte PDF histórico', async ({ page }, testIn
   await expect(page.locator('#filter-count')).toHaveText('1 escuela');
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 3620 SAN PEDRO/i }).click();
   await expect(page.locator('#drawer-content .school-identity .status-archive')).toContainText('Sin ficha RUE extraída');
-  await expect(page.locator('.photo-preview img')).toBeVisible();
-  await expect(page.locator('.pdf-inventory')).toContainText('2 paginas');
+  await expect(page.getByRole('heading', { name: 'Bloques, aulas y espacios' })).toBeVisible();
+  await expect(page.locator('.evidence-block')).toHaveCount(1);
+  await expect(page.locator('.evidence-space')).toHaveCount(2);
+  await expect(page.locator('.evidence-crop-card')).toHaveCount(4);
+  await expect(page.locator('.evidence-crop-card[data-crop-rendered="true"]').first()).toBeVisible({ timeout: 15_000 });
+  await page.screenshot({ path: `artifacts/${testInfo.project.name}-evidence-hierarchy.png`, fullPage: false });
+  await page.locator('.photo-preview').scrollIntoViewIfNeeded();
+  await expect(page.locator('.photo-preview img')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.pdf-inventory')).toContainText('4 fotos identificadas');
+  await page.locator('.evidence-crop-card').first().click();
+  await expect(page.locator('.pdf-page-focus canvas')).toBeVisible();
+  await expect(page.locator('.pdf-focus-toolbar strong')).toContainText('Foto 1');
+  await page.getByRole('button', { name: 'Cerrar fotografía' }).click();
   await page.getByRole('button', { name: 'Ver laminas' }).click();
   await expect(page.locator('.pdf-page-grid .pdf-sheet-card')).toHaveCount(2);
   await expect(page.locator('.pdf-sheet-card canvas').first()).toBeVisible();

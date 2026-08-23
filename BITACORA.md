@@ -1,5 +1,38 @@
 # Bitácora
 
+## 2026-08-23 - Desglose fotográfico por bloque y espacio 1.4.0
+
+### Objetivo
+
+Mostrar para cada escuela el desglose de bloques, pisos, aulas y otros espacios, con las fotos que ya están rotuladas dentro de los reportes PDF históricos.
+
+### Implementación
+
+- El panel de escuela combina los registros directos y el índice PDF autenticado en un árbol **bloque > piso > espacio > fotos**.
+- Cada tarjeta muestra el recorte de la foto, su número, rótulo, página y estado de conciliación RUE.
+- Al pulsar un recorte, el visor abre exactamente esa zona de la página; el PDF completo permanece disponible para verificación.
+- Las miniaturas se renderizan de forma diferida y por página para evitar cargar todo el documento visualmente de una vez.
+- Los filtros de especialidad también se aplican a los rótulos recuperados de las fotos PDF.
+- Se incrementó frontend y caché PWA a `1.4.0`.
+
+### Datos y privacidad
+
+- La base privada contiene 30 PDF, 3.036 fotos individualizadas y 666 combinaciones documento-bloque-piso-espacio.
+- `assets/data/dashboard.json` mantiene únicamente el corte sanitizado de 49 escuelas y conteos agregados.
+- `reports/privacy_audit.json`: `PASS`, sin rutas Windows, enlaces privados de Google, correos ni claves prohibidas.
+- Las fotos, rótulos y recortes se solicitan al backend después del login y de validar el acceso a la escuela.
+
+### Validación local
+
+- Pruebas de datos y validación estática: aprobadas; versión `1.4.0` y 49 escuelas.
+- Playwright en entorno limpio: 13 pruebas aprobadas y 1 omisión intencional, en escritorio y celular.
+- Cobertura específica: jerarquía, cuatro recortes simulados, apertura enfocada, vista del PDF completo, carga diferida, filtros, accesibilidad y ausencia de desbordamiento móvil.
+- Revisión visual de escritorio y celular: sin solapamientos ni texto fuera de sus controles.
+
+### Publicación y estado
+
+- Código local verificado; commit, push, GitHub Pages y prueba integrada con el backend actualizado pendientes de este cierre.
+
 ## 2026-08-22 - Galería de láminas fotográficas dentro de PDF 1.3.0
 
 ### Objetivo
