@@ -38,7 +38,11 @@ Relacionar cada fotografía histórica con su escuela RUE mediante los rótulos 
 
 ### Publicación
 
-- Pendiente de commit, push, finalización de workflows y verificación de la URL pública.
+- Commit funcional `968248f` publicado en `main` del repositorio operativo `censoescuelaspy/seguimiento_registros`.
+- Workflows `32605640049` y `32605639322`: finalizados con éxito; incluyeron pruebas de datos, validación estática, Playwright y despliegue en GitHub Pages.
+- URL pública verificada en `1.2.0` y esquema `2026-08-22.3`: 74 fotos OCR, 73 códigos, 69 ubicaciones, 74 vínculos confirmados, 0 revisiones y 0 conflictos.
+- Smoke test público en modo de simulación: vista Evidencias renderizada en escritorio, versión visible correcta y 0 errores de consola o de página.
+- GitHub Actions emitió una advertencia no bloqueante por la transición interna de acciones basadas en Node.js 20 a Node.js 24; la ejecución y publicación finalizaron correctamente.
 
 ## 2026-08-22 - Evidencias históricas por escuela 1.1.0
 
