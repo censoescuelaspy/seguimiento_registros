@@ -8,7 +8,7 @@ import { destroyCharts, renderOverviewCharts, renderTimeCharts } from './charts.
 import {
   destroySchoolMap, focusSchool, initSchoolMap, invalidateSchoolMap
 } from './map.js';
-import { renderPdfBrowser, renderPdfEvidenceThumbnails } from './pdf-viewer.js';
+import { renderPdfBrowser } from './pdf-viewer.js';
 import {
   categoryForPhoto, categoryLabel, debounce, escapeHtml, formatBytes, formatDate,
   formatHours, formatMinutes, formatNumber, formatPercent, icon, normalizeCode,
@@ -40,7 +40,7 @@ const state = {
   pdfEvidenceIndexes: new Map(),
   pdfEvidenceErrors: new Map(),
   pdfEvidenceLoading: new Set(),
-  evidenceThumbnailCleanups: [],
+  pdfEvidencePhotoPending: new Set(),
   refreshTimer: null,
   lastEvidenceRefresh: null
 };
@@ -347,6 +347,7 @@ async function logout(callServer = true) {
   state.pdfEvidenceIndexes.clear();
   state.pdfEvidenceErrors.clear();
   state.pdfEvidenceLoading.clear();
+  state.pdfEvidencePhotoPending.clear();
   showLogin('Sesión cerrada.');
 }
 
@@ -673,7 +674,6 @@ function openSchool(code, tab = state.drawerTab || 'summary') {
 function renderDrawer() {
   const school = findSchool(state.selectedSchoolCode);
   if (!school) return;
-  clearEvidenceThumbnailRenders();
   elements.drawerTitle.textContent = school.name;
   elements.drawerContent.innerHTML = `
     <div class="drawer-tabs" role="tablist">
@@ -698,7 +698,6 @@ function renderDrawer() {
   refreshIcons(elements.drawerContent);
   if (state.drawerTab === 'evidence') {
     ensureSchoolPdfEvidence(school);
-    startPdfEvidenceThumbnails(school);
   }
 }
 
@@ -828,16 +827,26 @@ function buildEvidenceHierarchy(records, visiblePhotos, pdfDocuments) {
     }));
 }
 
+function pdfEvidenceUrlKey(documentId, photoId, variant) {
+  return `pdf-evidence:${documentId}:${photoId}:${variant}`;
+}
+
 function renderPdfEvidencePhoto(item) {
   const { photo, documentPhoto } = item;
   const title = `Foto ${photo.photoNumber || photo.ordinal || ''}`.trim();
   const detail = photo.elementLabel || photo.cardLabel || photo.sectionLabel || 'Sin rótulo adicional';
+  const previewUrl = state.photoUrls.get(pdfEvidenceUrlKey(documentPhoto.fotoId, photo.id, 'preview'));
+  const preview = previewUrl
+    ? `<img src="${previewUrl}" alt="Vista previa de ${escapeHtml(title)}" loading="lazy" decoding="async">`
+    : photo.assetReady
+      ? '<small data-crop-status>Cargando vista rápida...</small>'
+      : '<small data-crop-status>Vista rápida no disponible</small>';
   const rueBadge = photo.rueStatus === 'CONFIRMADO'
     ? '<span class="evidence-link-badge is-confirmed">Coincide con RUE</span>'
     : photo.rueStatus === 'PROBABLE_REVISAR' || photo.needsReview
       ? '<span class="evidence-link-badge is-review">Revisar relación</span>'
       : '';
-  return `<button class="evidence-crop-card" type="button" data-pdf-evidence-photo data-pdf-document-id="${escapeHtml(documentPhoto.fotoId)}" data-pdf-page="${photo.page}" data-pdf-bbox="${escapeHtml(JSON.stringify(photo.bbox || []))}" data-pdf-label="${escapeHtml(`${title} - ${photo.spaceLabel || photo.sectionLabel || ''}`)}"><span class="evidence-crop-media"><canvas aria-hidden="true"></canvas><small data-crop-status>Cargando recorte...</small></span><span class="evidence-crop-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span><small>PDF · página ${photo.page}</small>${rueBadge}</span></button>`;
+  return `<button class="evidence-crop-card" type="button" data-pdf-evidence-photo data-pdf-document-id="${escapeHtml(documentPhoto.fotoId)}" data-pdf-photo-id="${escapeHtml(photo.id)}" data-pdf-label="${escapeHtml(`${title} - ${photo.spaceLabel || photo.sectionLabel || ''}`)}" aria-label="Abrir ${escapeHtml(title)}"><span class="evidence-crop-media"${photo.assetReady && !previewUrl ? ` data-auto-pdf-preview="${escapeHtml(photo.id)}"` : ''}>${preview}</span><span class="evidence-crop-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span><small>PDF · página ${photo.page}</small>${rueBadge}</span></button>`;
 }
 
 function renderEvidenceHierarchy(blocks, pdfDocuments) {
@@ -915,11 +924,6 @@ function renderPhotoCard(photo) {
   return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}"${previewUrl ? '' : ` data-auto-preview="${escapeHtml(photo.fotoId)}"`}>${preview}</div><div class="photo-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span>${inventory ? `<small class="pdf-inventory">${escapeHtml(inventory)}</small>` : ''}<small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon(isPdf ? 'images' : 'expand')} ${actionLabel}</button></div></article>`;
 }
 
-function clearEvidenceThumbnailRenders() {
-  state.evidenceThumbnailCleanups.forEach((cleanup) => cleanup?.());
-  state.evidenceThumbnailCleanups = [];
-}
-
 async function ensureSchoolPdfEvidence(school) {
   const documents = (state.remoteIndex.photosBySchool.get(school.code) || []).filter(isPdfDocument);
   const pending = documents.filter((photo) => (
@@ -942,26 +946,6 @@ async function ensureSchoolPdfEvidence(school) {
   if (state.selectedSchoolCode === school.code && state.drawerTab === 'evidence') renderDrawer();
 }
 
-async function startPdfEvidenceThumbnails(school) {
-  const documents = (state.remoteIndex.photosBySchool.get(school.code) || [])
-    .filter((photo) => isPdfDocument(photo) && state.pdfEvidenceIndexes.has(photo.fotoId));
-  for (const documentPhoto of documents) {
-    if (!elements.drawerContent.querySelector(`[data-pdf-document-id="${CSS.escape(documentPhoto.fotoId)}"]`)) continue;
-    try {
-      const url = await fetchPhotoUrl(documentPhoto.fotoId, 'original');
-      if (state.selectedSchoolCode !== school.code || state.drawerTab !== 'evidence') return;
-      const cleanup = renderPdfEvidenceThumbnails(elements.drawerContent, url, {
-        documentId: documentPhoto.fotoId,
-        root: elements.drawer,
-        onOpen: (focus, button) => loadPhoto(documentPhoto.fotoId, 'original', button, focus)
-      });
-      state.evidenceThumbnailCleanups.push(cleanup);
-    } catch (error) {
-      state.pdfEvidenceErrors.set(documentPhoto.fotoId, error.message || 'No se pudieron cargar las miniaturas.');
-    }
-  }
-}
-
 function bindCategoryButtons(root) {
   root.querySelectorAll('[data-category]').forEach((button) => button.addEventListener('click', () => {
     state.evidenceCategory = button.dataset.category;
@@ -972,6 +956,12 @@ function bindCategoryButtons(root) {
 
 function bindPhotoButtons() {
   elements.drawerContent.querySelectorAll('[data-photo-variant="original"]').forEach((button) => button.addEventListener('click', () => loadPhoto(button.dataset.photoId, 'original', button)));
+  elements.drawerContent.querySelectorAll('[data-pdf-evidence-photo]').forEach((button) => button.addEventListener('click', () => loadPdfEvidencePhoto(
+    button.dataset.pdfDocumentId,
+    button.dataset.pdfPhotoId,
+    button.dataset.pdfLabel,
+    button
+  )));
 }
 
 function disconnectPreviewObserver() {
@@ -982,20 +972,26 @@ function disconnectPreviewObserver() {
 function bindAutomaticPreviews() {
   disconnectPreviewObserver();
   const previews = [...elements.drawerContent.querySelectorAll('.photo-preview[data-auto-preview]')];
-  if (!previews.length) return;
+  const pdfPreviews = [...elements.drawerContent.querySelectorAll('.evidence-crop-media[data-auto-pdf-preview]')];
+  if (!previews.length && !pdfPreviews.length) return;
   const load = (preview) => loadPhotoPreview(preview.dataset.autoPreview, preview);
   if (!('IntersectionObserver' in window)) {
     previews.forEach(load);
+    loadPdfEvidencePreviewBatch(pdfPreviews);
     return;
   }
   state.previewObserver = new IntersectionObserver((entries, observer) => {
+    const visiblePdfPreviews = [];
     entries.forEach((entry) => {
       if (!entry.isIntersecting) return;
       observer.unobserve(entry.target);
-      load(entry.target);
+      if (entry.target.dataset.autoPdfPreview) visiblePdfPreviews.push(entry.target);
+      else load(entry.target);
     });
+    loadPdfEvidencePreviewBatch(visiblePdfPreviews);
   }, { root: elements.drawer, rootMargin: '180px 0px', threshold: 0.01 });
   previews.forEach((preview) => state.previewObserver.observe(preview));
+  pdfPreviews.forEach((preview) => state.previewObserver.observe(preview));
 }
 
 async function loadPhotoPreview(photoId, preview) {
@@ -1021,6 +1017,135 @@ async function loadPhotoPreview(photoId, preview) {
       loadPhotoPreview(photoId, preview);
     });
     refreshIcons(preview);
+  }
+}
+
+function objectUrlFromBase64(base64, mimeType = 'image/jpeg') {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
+function matchingPdfPreviewElements(documentId, photoId) {
+  return [...elements.drawerContent.querySelectorAll('[data-pdf-evidence-photo]')]
+    .filter((button) => button.dataset.pdfDocumentId === documentId && button.dataset.pdfPhotoId === photoId)
+    .map((button) => button.querySelector('.evidence-crop-media'))
+    .filter(Boolean);
+}
+
+function showPdfEvidencePreview(documentId, photoId, url, error = '') {
+  matchingPdfPreviewElements(documentId, photoId).forEach((preview) => {
+    if (url) {
+      const label = preview.closest('[data-pdf-evidence-photo]')?.dataset.pdfLabel || 'foto del reporte';
+      preview.innerHTML = `<img src="${url}" alt="Vista previa de ${escapeHtml(label)}" loading="lazy" decoding="async">`;
+      preview.dataset.previewState = 'loaded';
+      preview.removeAttribute('data-auto-pdf-preview');
+    } else {
+      preview.innerHTML = '<small data-crop-status>Vista rápida no disponible</small>';
+      preview.dataset.previewState = 'error';
+      preview.title = error || 'Abra el reporte original para consultar esta foto.';
+    }
+  });
+}
+
+async function loadPdfEvidencePreviewBatch(previews) {
+  if (!previews?.length) return;
+  const groups = new Map();
+  previews.forEach((preview) => {
+    const button = preview.closest('[data-pdf-evidence-photo]');
+    const documentId = button?.dataset.pdfDocumentId || '';
+    const photoId = button?.dataset.pdfPhotoId || '';
+    if (!documentId || !photoId) return;
+    const key = pdfEvidenceUrlKey(documentId, photoId, 'preview');
+    if (state.photoUrls.has(key)) {
+      showPdfEvidencePreview(documentId, photoId, state.photoUrls.get(key));
+      return;
+    }
+    if (state.pdfEvidencePhotoPending.has(key)) return;
+    if (!groups.has(documentId)) groups.set(documentId, []);
+    groups.get(documentId).push(photoId);
+  });
+
+  for (const [documentId, photoIds] of groups) {
+    for (let start = 0; start < photoIds.length; start += 12) {
+      const batch = [...new Set(photoIds.slice(start, start + 12))];
+      const generation = state.mediaGeneration;
+      batch.forEach((photoId) => state.pdfEvidencePhotoPending.add(pdfEvidenceUrlKey(documentId, photoId, 'preview')));
+      try {
+        const response = await api.getPdfEvidencePhotoContent(documentId, batch, 'preview');
+        const returned = new Set();
+        (response.items || []).forEach((item) => {
+          const photoId = String(item.id || '');
+          if (!batch.includes(photoId) || !item.base64) return;
+          returned.add(photoId);
+          const key = pdfEvidenceUrlKey(documentId, photoId, 'preview');
+          let url = state.photoUrls.get(key);
+          if (!url) {
+            url = objectUrlFromBase64(item.base64, item.mimeType || 'image/jpeg');
+            if (generation !== state.mediaGeneration) {
+              URL.revokeObjectURL(url);
+              return;
+            }
+            state.photoUrls.set(key, url);
+          }
+          showPdfEvidencePreview(documentId, photoId, url);
+        });
+        batch.filter((photoId) => !returned.has(photoId)).forEach((photoId) => {
+          showPdfEvidencePreview(documentId, photoId, '', 'El derivado privado no está disponible.');
+        });
+      } catch (error) {
+        batch.forEach((photoId) => showPdfEvidencePreview(documentId, photoId, '', error.message));
+      } finally {
+        batch.forEach((photoId) => state.pdfEvidencePhotoPending.delete(pdfEvidenceUrlKey(documentId, photoId, 'preview')));
+      }
+    }
+  }
+}
+
+async function fetchPdfEvidencePhotoUrl(documentId, photoId, variant = 'full') {
+  const key = pdfEvidenceUrlKey(documentId, photoId, variant);
+  if (state.photoUrls.has(key)) return state.photoUrls.get(key);
+  if (state.photoRequests.has(key)) return state.photoRequests.get(key);
+  const generation = state.mediaGeneration;
+  const request = (async () => {
+    const response = await api.getPdfEvidencePhotoContent(documentId, [photoId], variant);
+    const item = (response.items || []).find((candidate) => String(candidate.id) === String(photoId));
+    if (!item?.base64) throw new ApiError('La vista rápida no está disponible. Abra el reporte original.', 'PDF_ASSET_MISSING');
+    const url = objectUrlFromBase64(item.base64, item.mimeType || 'image/jpeg');
+    if (generation !== state.mediaGeneration) {
+      URL.revokeObjectURL(url);
+      throw new ApiError('La sesión cambió durante la descarga.', 'REQUEST_CANCELLED');
+    }
+    state.photoUrls.set(key, url);
+    return url;
+  })();
+  state.photoRequests.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (state.photoRequests.get(key) === request) state.photoRequests.delete(key);
+  }
+}
+
+async function loadPdfEvidencePhoto(documentId, photoId, label, button) {
+  if (!documentId || !photoId) return;
+  setBusy(button, true);
+  try {
+    state.photoDialogCleanup?.();
+    state.photoDialogCleanup = null;
+    elements.photoStage.innerHTML = `<div class="loading-block">${icon('loader-circle')} Cargando foto protegida...</div>`;
+    elements.photoCaption.textContent = label || 'Foto del reporte PDF';
+    document.getElementById('photo-dialog-title').textContent = 'Foto del reporte PDF';
+    elements.photoDialog.showModal();
+    refreshIcons(elements.photoDialog);
+    const url = await fetchPdfEvidencePhotoUrl(documentId, photoId, 'full');
+    elements.photoStage.innerHTML = `<img src="${url}" alt="${escapeHtml(label || 'Foto del reporte PDF')}">`;
+  } catch (error) {
+    if (elements.photoDialog.open) elements.photoDialog.close();
+    toast(error.message || 'No se pudo cargar la foto.', 'error');
+  } finally {
+    setBusy(button, false);
   }
 }
 
@@ -1108,11 +1233,11 @@ function closePhotoDialog() {
 }
 
 function clearPhotoUrls() {
-  clearEvidenceThumbnailRenders();
   state.photoDialogCleanup?.();
   state.photoDialogCleanup = null;
   state.mediaGeneration += 1;
   state.photoRequests.clear();
+  state.pdfEvidencePhotoPending.clear();
   state.photoUrls.forEach((url) => URL.revokeObjectURL(url));
   state.photoUrls.clear();
   state.photoDialogUrl = '';
@@ -1120,7 +1245,6 @@ function clearPhotoUrls() {
 
 function closeDrawer() {
   disconnectPreviewObserver();
-  clearEvidenceThumbnailRenders();
   elements.drawer.classList.remove('is-open');
   elements.drawer.setAttribute('aria-hidden', 'true');
   elements.drawerBackdrop.hidden = true;

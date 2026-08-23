@@ -5,7 +5,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
-  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.4.0');
+  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.5.0');
 }
 
 async function navigate(page, name) {
@@ -89,18 +89,28 @@ test('escuela solo en archivo y reporte PDF histórico', async ({ page }, testIn
   await expect(page.locator('.evidence-block')).toHaveCount(1);
   await expect(page.locator('.evidence-space')).toHaveCount(2);
   await expect(page.locator('.evidence-crop-card')).toHaveCount(4);
-  await expect(page.locator('.evidence-crop-card[data-crop-rendered="true"]').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.evidence-crop-media img').first()).toBeVisible({ timeout: 15_000 });
+  expect(await page.evaluate(() => window.__CIALPA_DEMO_API_CALLS__.filter((call) => (
+    call.action === 'getPhotoContent' && call.payload.fotoId === 'archive:demo-report-001' && call.payload.variant === 'original'
+  )).length)).toBe(0);
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-evidence-hierarchy.png`, fullPage: false });
   await page.locator('.photo-preview').scrollIntoViewIfNeeded();
   await expect(page.locator('.photo-preview img')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.pdf-inventory')).toContainText('4 fotos identificadas');
   await page.locator('.evidence-crop-card').first().click();
-  await expect(page.locator('.pdf-page-focus canvas')).toBeVisible();
-  await expect(page.locator('.pdf-focus-toolbar strong')).toContainText('Foto 1');
+  await expect(page.locator('#photo-stage img')).toBeVisible();
+  await expect(page.locator('.pdf-page-focus')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__CIALPA_DEMO_API_CALLS__.filter((call) => call.action === 'getPdfEvidencePhotoContent').length)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__CIALPA_DEMO_API_CALLS__.filter((call) => (
+    call.action === 'getPhotoContent' && call.payload.fotoId === 'archive:demo-report-001' && call.payload.variant === 'original'
+  )).length)).toBe(0);
   await page.getByRole('button', { name: 'Cerrar fotografía' }).click();
   await page.getByRole('button', { name: 'Ver laminas' }).click();
   await expect(page.locator('.pdf-page-grid .pdf-sheet-card')).toHaveCount(2);
   await expect(page.locator('.pdf-sheet-card canvas').first()).toBeVisible();
+  expect(await page.evaluate(() => window.__CIALPA_DEMO_API_CALLS__.filter((call) => (
+    call.action === 'getPhotoContent' && call.payload.fotoId === 'archive:demo-report-001' && call.payload.variant === 'original'
+  )).length)).toBeGreaterThan(0);
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-pdf-laminas.png`, fullPage: false });
   await page.getByRole('button', { name: 'Ampliar pagina 1' }).click();
   await expect(page.locator('.pdf-page-focus canvas')).toBeVisible();

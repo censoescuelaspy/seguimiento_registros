@@ -35,6 +35,7 @@ export class ApiError extends Error {
 const DEMO_PHOTO_ID = 'demo-electric-001';
 const DEMO_PDF_ID = 'archive:demo-report-001';
 let demoAssetPromise = null;
+if (APP_CONFIG.demo && typeof window !== 'undefined') window.__CIALPA_DEMO_API_CALLS__ = [];
 
 async function demoAssetBase64() {
   if (!demoAssetPromise) {
@@ -147,6 +148,7 @@ function demoRecords() {
 }
 
 async function demoRequest(action, payload) {
+  if (typeof window !== 'undefined') window.__CIALPA_DEMO_API_CALLS__?.push({ action, payload: { ...payload } });
   if (action === 'health') return { service: 'CIALPA Seguimiento demo', version: APP_CONFIG.version };
   if (action === 'login') {
     if (String(payload.codigoCensista || '').toLowerCase() !== 'demo' || String(payload.pin || '') !== '1234') {
@@ -178,16 +180,27 @@ async function demoRequest(action, payload) {
     if (payload.fotoId !== DEMO_PDF_ID) throw new ApiError('Reporte simulado no encontrado.', 'PDF_NOT_FOUND');
     return {
       fotoId: DEMO_PDF_ID,
-      schemaVersion: '2026-08-23.1',
+      schemaVersion: '2026-08-23.2',
       pipelineVersion: '1.0.0',
       generatedAt: '2026-08-23T08:00:00-03:00',
-      summary: { pages: 2, photoPages: 2, photoCount: 4, classifiedCount: 4, reviewCount: 0, blockCount: 1, spaceCount: 2, extractionStatus: 'OK' },
+      summary: { pages: 2, photoPages: 2, photoCount: 4, classifiedCount: 4, reviewCount: 0, blockCount: 1, spaceCount: 2, assetReadyCount: 4, extractionStatus: 'OK' },
       photos: [
-        { id: 'demo-pdf-1', page: 1, ordinal: 1, photoNumber: 1, sectionLabel: 'B1 PB Aula1', cardLabel: 'B1A1 Foto 1', elementLabel: '', block: '1', floor: 'PB', spaceType: 'AULA', spaceNumber: '1', spaceLabel: 'Aula 1', bbox: [0.10, 0.18, 0.47, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' },
-        { id: 'demo-pdf-2', page: 1, ordinal: 2, photoNumber: 2, sectionLabel: 'B1 PB Aula1', cardLabel: 'B1A1 Foto 2', elementLabel: 'Tablero electrico', block: '1', floor: 'PB', spaceType: 'AULA', spaceNumber: '1', spaceLabel: 'Aula 1', bbox: [0.52, 0.18, 0.89, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' },
-        { id: 'demo-pdf-3', page: 2, ordinal: 1, photoNumber: 1, sectionLabel: 'B1 PB Sanitario1', cardLabel: 'B1S1 Foto 1', elementLabel: 'Inodoro', block: '1', floor: 'PB', spaceType: 'SANITARIO', spaceNumber: '1', spaceLabel: 'Sanitario 1', bbox: [0.10, 0.18, 0.47, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' },
-        { id: 'demo-pdf-4', page: 2, ordinal: 2, photoNumber: 2, sectionLabel: 'B1 PB Sanitario1', cardLabel: 'B1S1 Foto 2', elementLabel: 'Lavamanos', block: '1', floor: 'PB', spaceType: 'SANITARIO', spaceNumber: '1', spaceLabel: 'Sanitario 1', bbox: [0.52, 0.18, 0.89, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1' }
+        { id: 'demo-pdf-1', page: 1, ordinal: 1, photoNumber: 1, sectionLabel: 'B1 PB Aula1', cardLabel: 'B1A1 Foto 1', elementLabel: '', block: '1', floor: 'PB', spaceType: 'AULA', spaceNumber: '1', spaceLabel: 'Aula 1', bbox: [0.10, 0.18, 0.47, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1', assetReady: true, assetBytesPreview: 16000, assetBytesFull: 82000 },
+        { id: 'demo-pdf-2', page: 1, ordinal: 2, photoNumber: 2, sectionLabel: 'B1 PB Aula1', cardLabel: 'B1A1 Foto 2', elementLabel: 'Tablero electrico', block: '1', floor: 'PB', spaceType: 'AULA', spaceNumber: '1', spaceLabel: 'Aula 1', bbox: [0.52, 0.18, 0.89, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1', assetReady: true, assetBytesPreview: 16000, assetBytesFull: 82000 },
+        { id: 'demo-pdf-3', page: 2, ordinal: 1, photoNumber: 1, sectionLabel: 'B1 PB Sanitario1', cardLabel: 'B1S1 Foto 1', elementLabel: 'Inodoro', block: '1', floor: 'PB', spaceType: 'SANITARIO', spaceNumber: '1', spaceLabel: 'Sanitario 1', bbox: [0.10, 0.18, 0.47, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1', assetReady: true, assetBytesPreview: 16000, assetBytesFull: 82000 },
+        { id: 'demo-pdf-4', page: 2, ordinal: 2, photoNumber: 2, sectionLabel: 'B1 PB Sanitario1', cardLabel: 'B1S1 Foto 2', elementLabel: 'Lavamanos', block: '1', floor: 'PB', spaceType: 'SANITARIO', spaceNumber: '1', spaceLabel: 'Sanitario 1', bbox: [0.52, 0.18, 0.89, 0.48], method: 'TEXTO_NATIVO', confidence: 0.98, needsReview: false, rueStatus: 'CONFIRMADO', rueLabel: 'Bloque 1 Planta baja N 1', assetReady: true, assetBytesPreview: 16000, assetBytesFull: 82000 }
       ]
+    };
+  }
+  if (action === 'getPdfEvidencePhotoContent') {
+    if (payload.fotoId !== DEMO_PDF_ID) throw new ApiError('Reporte simulado no encontrado.', 'PDF_NOT_FOUND');
+    const base64 = await demoAssetBase64();
+    return {
+      fotoId: DEMO_PDF_ID,
+      variant: payload.variant || 'preview',
+      items: (payload.photoIds || []).map((id) => ({ id, mimeType: 'image/png', bytes: Math.ceil(base64.length * 0.75), base64 })),
+      missing: [],
+      bytes: Math.ceil(base64.length * 0.75) * (payload.photoIds || []).length
     };
   }
   throw new ApiError('Acción demo no implementada.', 'DEMO_ACTION_MISSING');
@@ -304,5 +317,8 @@ export class ApiClient {
   }
   getPdfEvidenceIndex(fotoId) {
     return this.request('getPdfEvidenceIndex', { fotoId }, { timeout: 90000 });
+  }
+  getPdfEvidencePhotoContent(fotoId, photoIds, variant = 'preview') {
+    return this.request('getPdfEvidencePhotoContent', { fotoId, photoIds, variant }, { timeout: 90000 });
   }
 }

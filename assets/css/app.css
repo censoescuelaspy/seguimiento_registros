@@ -449,7 +449,7 @@ img { max-width: 100%; }
 .evidence-crop-card:hover, .evidence-crop-card:focus-visible { border-color: var(--teal-700); box-shadow: 0 0 0 2px rgba(15,118,110,.16); }
 .evidence-crop-card.has-error { border-color: var(--red-700); }
 .evidence-crop-media { aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; background: var(--surface-muted); }
-.evidence-crop-media canvas { grid-area: 1 / 1; width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.evidence-crop-media canvas, .evidence-crop-media img { grid-area: 1 / 1; width: 100%; height: 100%; object-fit: contain; background: #fff; }
 .evidence-crop-media small { grid-area: 1 / 1; padding: 4px 6px; color: var(--ink-500); background: rgba(255,255,255,.9); font-size: .58rem; }
 .evidence-crop-card[data-crop-rendered="true"] .evidence-crop-media small { align-self: end; justify-self: end; }
 .evidence-crop-meta { display: grid; gap: 2px; padding: 8px; }
