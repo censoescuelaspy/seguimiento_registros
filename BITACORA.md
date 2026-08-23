@@ -1,5 +1,44 @@
 # Bitácora
 
+## 2026-08-23 - Carga rápida de fotos PDF 1.5.0
+
+### Objetivo
+
+Reducir la espera de la galería sin publicar imágenes ni debilitar el control por escuela.
+
+### Diagnóstico
+
+- La interfaz descargaba el PDF completo y recién después recortaba cada tarjeta con PDF.js.
+- Los 30 PDF ocupan 191,8 MB; el mayor alcanza 19,9 MB y podía requerir cerca de 90 solicitudes secuenciales antes de mostrar una foto.
+
+### Implementación
+
+- Se eliminó la descarga automática del PDF para construir miniaturas.
+- `IntersectionObserver` solicita únicamente las tarjetas visibles y las agrupa por documento en lotes de hasta 12.
+- Cada tarjeta usa `PREVIEW`; al ampliarla solicita un único `FULL` y conserva su URL temporal durante la sesión.
+- **Ver láminas** mantiene el visor PDF.js y es la única acción que obtiene el original.
+- La API demo registra llamadas para comprobar que ningún `getPhotoContent(..., original)` ocurre antes de esa acción.
+- Se incrementó frontend y caché PWA a `1.5.0`.
+
+### Datos y seguridad
+
+- La base privada contiene 3.036 fotos PDF, 6.072 derivados JPEG y 3.110 imágenes lógicas incluyendo las 74 fotos directas.
+- Apps Script valida sesión, escuela, documento e identificador de foto antes de leer un derivado.
+- La instantánea pública conserva 49 escuelas y solo datos agregados; no incorpora rutas, hashes ni binarios.
+
+### Validación local
+
+- Exportación sanitizada y validación estática: `PASS`, versión `1.5.0`.
+- Playwright: 13 pruebas aprobadas y 1 omisión intencional en escritorio y celular.
+- Cobertura específica: lote de miniaturas, apertura `FULL`, ausencia de descarga PDF automática, visor original explícito, mapa, filtros, accesibilidad y responsive.
+
+### Publicación y estado
+
+- Commit funcional `ec0b6ee` publicado en `main` de `censoescuelaspy/seguimiento_registros`.
+- Workflows `32662355714` y `32662355210`: finalizados correctamente, incluidas la validación estática, la suite Playwright y GitHub Pages.
+- Backend estable publicado como Apps Script `@34`, versión `1.13.0` y esquema `2026-08-23.2`.
+- Smoke test público en `1.5.0`: miniatura y ampliación individual visibles, dos solicitudes de derivados, cero solicitudes del PDF original y cero errores de página antes de pulsar **Ver láminas**.
+
 ## 2026-08-23 - Desglose fotográfico por bloque y espacio 1.4.0
 
 ### Objetivo
