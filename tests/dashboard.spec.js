@@ -5,7 +5,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
-  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.2.0');
+  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.2.1');
 }
 
 async function navigate(page, name) {
@@ -66,8 +66,9 @@ test('evidencias protegidas por escuela y especialidad', async ({ page }, testIn
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 203 PROFESOR CLETO ROMERO/i }).click();
   await expect(page.getByRole('tab', { name: 'Evidencias' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#drawer-content .detail-metric').filter({ hasText: 'Fotos vinculadas RUE' }).locator('strong')).toHaveText('74');
-  await page.getByRole('button', { name: 'Cargar vista previa' }).click();
   await expect(page.locator('.photo-preview img')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cargar vista previa' })).toHaveCount(0);
+  await page.screenshot({ path: `artifacts/${testInfo.project.name}-evidence-preview.png`, fullPage: false });
   await page.getByRole('button', { name: 'Abrir imagen' }).click();
   await expect(page.locator('#photo-dialog')).toBeVisible();
   await expect(page.locator('#photo-stage img')).toBeVisible();
@@ -83,7 +84,6 @@ test('escuela solo en archivo y reporte PDF histórico', async ({ page }) => {
   await expect(page.locator('#filter-count')).toHaveText('1 escuela');
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 3620 SAN PEDRO/i }).click();
   await expect(page.locator('#drawer-content .school-identity .status-archive')).toContainText('Sin ficha RUE extraída');
-  await page.getByRole('button', { name: 'Cargar vista previa' }).click();
   await expect(page.locator('.photo-preview img')).toBeVisible();
   await page.getByRole('button', { name: 'Abrir PDF' }).click();
   await expect(page.locator('#photo-stage iframe')).toBeVisible();

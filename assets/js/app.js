@@ -31,6 +31,9 @@ const state = {
   evidenceCategory: 'all',
   teamCount: 5,
   photoUrls: new Map(),
+  photoRequests: new Map(),
+  previewObserver: null,
+  mediaGeneration: 0,
   photoDialogUrl: '',
   refreshTimer: null,
   lastEvidenceRefresh: null
@@ -325,6 +328,7 @@ async function logout(callServer = true) {
   clearInterval(state.refreshTimer);
   closeDrawer();
   closePhotoDialog();
+  clearPhotoUrls();
   if (callServer && state.session) {
     try { await api.logout(); } catch (ignore) { /* local logout still proceeds */ }
   }
@@ -675,6 +679,7 @@ function renderDrawer() {
   }));
   bindCategoryButtons(elements.drawerContent);
   bindPhotoButtons();
+  bindAutomaticPreviews();
   refreshIcons(elements.drawerContent);
 }
 
@@ -723,14 +728,21 @@ function renderDrawerEvidence(school) {
     }).join('') : emptyState('Sin evidencias autorizadas', 'No existen archivos para esta escuela o su cuenta no tiene acceso.', 'shield-alert')}`;
 }
 
+function photoTitle(photo) {
+  return (photo.archivoHistorico
+    ? photo.nombreArchivo
+    : photo.codigoFoto || photo.codigoElemento || photo.nombreArchivo) || 'Evidencia';
+}
+
 function renderPhotoCard(photo) {
   const isPdf = photo.mimeType === 'application/pdf' || photo.esDocumento;
   const previewUrl = state.photoUrls.get(`${photo.fotoId}:preview`);
-  const title = photo.archivoHistorico
-    ? photo.nombreArchivo
-    : photo.codigoFoto || photo.codigoElemento || photo.nombreArchivo;
+  const title = photoTitle(photo);
   const type = isPdf ? 'Reporte PDF histórico' : photo.archivoHistorico ? 'Foto histórica sin clasificar' : photo.tipoElemento || photo.tipoFoto || 'Evidencia';
-  return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}">${previewUrl ? `<img src="${previewUrl}" alt="Vista previa de ${escapeHtml(title)}">` : `<button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="preview">${icon(isPdf ? 'file-text' : 'image')} Cargar vista previa</button>`}</div><div class="photo-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span><small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon(isPdf ? 'file-text' : 'expand')} ${isPdf ? 'Abrir PDF' : 'Abrir imagen'}</button></div></article>`;
+  const preview = previewUrl
+    ? `<img src="${previewUrl}" alt="Vista previa de ${escapeHtml(title)}" loading="lazy" decoding="async">`
+    : `<div class="photo-preview-status" role="status">${icon('loader-circle')}<span>Cargando vista previa...</span></div>`;
+  return `<article class="photo-card"><div class="photo-preview" data-preview-for="${escapeHtml(photo.fotoId)}"${previewUrl ? '' : ` data-auto-preview="${escapeHtml(photo.fotoId)}"`}>${preview}</div><div class="photo-meta"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)} · ${escapeHtml(formatDate(photo.capturedAt, true))}</span><small>${escapeHtml(photo.nombreArchivo || '')} · ${escapeHtml(formatBytes(photo.bytes))}</small><button class="button button-secondary" data-photo-id="${escapeHtml(photo.fotoId)}" data-photo-variant="original">${icon(isPdf ? 'file-text' : 'expand')} ${isPdf ? 'Abrir PDF' : 'Abrir imagen'}</button></div></article>`;
 }
 
 function bindCategoryButtons(root) {
@@ -742,27 +754,91 @@ function bindCategoryButtons(root) {
 }
 
 function bindPhotoButtons() {
-  elements.drawerContent.querySelectorAll('[data-photo-id]').forEach((button) => button.addEventListener('click', () => loadPhoto(button.dataset.photoId, button.dataset.photoVariant, button)));
+  elements.drawerContent.querySelectorAll('[data-photo-variant="original"]').forEach((button) => button.addEventListener('click', () => loadPhoto(button.dataset.photoId, 'original', button)));
+}
+
+function disconnectPreviewObserver() {
+  if (state.previewObserver) state.previewObserver.disconnect();
+  state.previewObserver = null;
+}
+
+function bindAutomaticPreviews() {
+  disconnectPreviewObserver();
+  const previews = [...elements.drawerContent.querySelectorAll('.photo-preview[data-auto-preview]')];
+  if (!previews.length) return;
+  const load = (preview) => loadPhotoPreview(preview.dataset.autoPreview, preview);
+  if (!('IntersectionObserver' in window)) {
+    previews.forEach(load);
+    return;
+  }
+  state.previewObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      observer.unobserve(entry.target);
+      load(entry.target);
+    });
+  }, { root: elements.drawer, rootMargin: '180px 0px', threshold: 0.01 });
+  previews.forEach((preview) => state.previewObserver.observe(preview));
+}
+
+async function loadPhotoPreview(photoId, preview) {
+  if (!photoId || !preview?.isConnected || preview.dataset.previewState === 'loading') return;
+  const photo = (state.remote.photos || []).find((item) => item.fotoId === photoId);
+  if (!photo) return;
+  preview.dataset.previewState = 'loading';
+  preview.innerHTML = `<div class="photo-preview-status" role="status">${icon('loader-circle')}<span>Cargando vista previa...</span></div>`;
+  refreshIcons(preview);
+  try {
+    const url = await fetchPhotoUrl(photoId, 'preview');
+    if (!preview.isConnected) return;
+    preview.innerHTML = `<img src="${url}" alt="Vista previa de ${escapeHtml(photoTitle(photo))}" loading="lazy" decoding="async">`;
+    preview.removeAttribute('data-auto-preview');
+    preview.dataset.previewState = 'loaded';
+  } catch (error) {
+    if (!preview.isConnected) return;
+    preview.dataset.previewState = 'error';
+    preview.innerHTML = `<div class="photo-preview-error"><span>No se pudo cargar la vista previa.</span><button class="button button-secondary" type="button">${icon('refresh-cw')} Reintentar</button></div>`;
+    const retry = preview.querySelector('button');
+    retry.addEventListener('click', () => {
+      preview.dataset.previewState = 'idle';
+      loadPhotoPreview(photoId, preview);
+    });
+    refreshIcons(preview);
+  }
 }
 
 async function fetchPhotoUrl(photoId, variant) {
   const key = `${photoId}:${variant}`;
   if (state.photoUrls.has(key)) return state.photoUrls.get(key);
-  const first = await api.getPhotoContent(photoId, 0, variant);
-  const chunks = [first.chunk];
-  for (let index = 1; index < Number(first.totalChunks || 1); index += 1) {
-    const part = await api.getPhotoContent(photoId, index, variant);
-    chunks.push(part.chunk);
+  if (state.photoRequests.has(key)) return state.photoRequests.get(key);
+  const generation = state.mediaGeneration;
+  const request = (async () => {
+    const first = await api.getPhotoContent(photoId, 0, variant);
+    const chunks = [first.chunk];
+    for (let index = 1; index < Number(first.totalChunks || 1); index += 1) {
+      const part = await api.getPhotoContent(photoId, index, variant);
+      chunks.push(part.chunk);
+    }
+    const byteParts = chunks.map((chunk) => {
+      const binary = atob(chunk);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return bytes;
+    });
+    const url = URL.createObjectURL(new Blob(byteParts, { type: first.mimeType || 'image/jpeg' }));
+    if (generation !== state.mediaGeneration) {
+      URL.revokeObjectURL(url);
+      throw new ApiError('La sesión cambió durante la descarga.', 'REQUEST_CANCELLED');
+    }
+    state.photoUrls.set(key, url);
+    return url;
+  })();
+  state.photoRequests.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (state.photoRequests.get(key) === request) state.photoRequests.delete(key);
   }
-  const byteParts = chunks.map((chunk) => {
-    const binary = atob(chunk);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return bytes;
-  });
-  const url = URL.createObjectURL(new Blob(byteParts, { type: first.mimeType || 'image/jpeg' }));
-  state.photoUrls.set(key, url);
-  return url;
 }
 
 async function loadPhoto(photoId, variant, button) {
@@ -770,10 +846,7 @@ async function loadPhoto(photoId, variant, button) {
   if (!photo) return;
   setBusy(button, true);
   try {
-    if (variant === 'preview') {
-      await fetchPhotoUrl(photoId, 'preview');
-      renderDrawer();
-    } else {
+    if (variant === 'original') {
       const isPdf = photo.mimeType === 'application/pdf' || photo.esDocumento;
       elements.photoStage.innerHTML = `<div class="loading-block">${icon('loader-circle')} Cargando evidencia protegida...</div>`;
       elements.photoCaption.textContent = photo.nombreArchivo || photo.codigoFoto || 'Evidencia';
@@ -808,18 +881,20 @@ function closePhotoDialog() {
 }
 
 function clearPhotoUrls() {
+  state.mediaGeneration += 1;
+  state.photoRequests.clear();
   state.photoUrls.forEach((url) => URL.revokeObjectURL(url));
   state.photoUrls.clear();
   state.photoDialogUrl = '';
 }
 
 function closeDrawer() {
+  disconnectPreviewObserver();
   elements.drawer.classList.remove('is-open');
   elements.drawer.setAttribute('aria-hidden', 'true');
   elements.drawerBackdrop.hidden = true;
   document.body.style.overflow = '';
   elements.drawerContent.innerHTML = '';
-  clearPhotoUrls();
 }
 
 function resetFilters() {

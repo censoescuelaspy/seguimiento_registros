@@ -1,4 +1,4 @@
-const CACHE = 'cialpa-seguimiento-v1.2.0';
+const CACHE = 'cialpa-seguimiento-v1.2.1';
 const STATIC_ASSETS = [
   './', './index.html', './manifest.webmanifest', './version.json',
   './assets/css/app.css', './assets/js/app.js', './assets/js/api.js', './assets/js/charts.js',

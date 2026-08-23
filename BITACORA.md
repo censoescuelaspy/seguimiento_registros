@@ -1,5 +1,31 @@
 # Bitácora
 
+## 2026-08-22 - Vistas previas automáticas de evidencias 1.2.1
+
+### Objetivo
+
+Eliminar el paso manual **Cargar vista previa** y mostrar cada miniatura protegida automáticamente al consultar las evidencias de una escuela.
+
+### Implementación
+
+- Las miniaturas se solicitan al backend autenticado cuando su tarjeta entra en pantalla; no se descargan todas las evidencias de la escuela al mismo tiempo.
+- `IntersectionObserver` aplica carga diferida dentro del panel lateral y conserva una alternativa compatible para navegadores sin ese API.
+- Las solicitudes simultáneas del mismo archivo se deduplican y las URL temporales permanecen solo durante la sesión autenticada.
+- Un error de red queda contenido en la tarjeta y ofrece **Reintentar**, sin cerrar el panel ni impedir consultar las demás evidencias.
+- Los originales mantienen el flujo protegido **Abrir imagen** o **Abrir PDF**.
+
+### Validación local
+
+- Sintaxis JavaScript y Python: aprobada.
+- Exportación sanitizada y auditoría de privacidad: `PASS`.
+- Pruebas de datos: 2/2 aprobadas.
+- Playwright en escritorio y celular: 13 pruebas aprobadas y 1 omisión intencional.
+- Cobertura específica: miniatura de imagen y miniatura de PDF visibles sin clic previo, ausencia del botón **Cargar vista previa**, apertura de originales y captura visual de la galería.
+
+### Publicación
+
+- Pendiente de commit, push, workflows y verificación pública de `1.2.1`.
+
 ## 2026-08-22 - Conciliación OCR de fotografías con RUE 1.2.0
 
 ### Objetivo
