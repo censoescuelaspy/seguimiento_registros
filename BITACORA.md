@@ -26,11 +26,15 @@ Mostrar automáticamente las páginas con fotografías de cada reporte PDF hist�
 - Exportación sanitizada, auditoría de privacidad y validación estática: `PASS`.
 - Playwright: 13 pruebas aprobadas y 1 omisión intencional en escritorio y celular.
 - Se comprobaron la galería de dos páginas, renderizado no vacío, ampliación, mapa, filtros y ausencia de desbordamiento móvil.
+- Prueba con el PDF real de La Arboleda: 66 páginas, 30 láminas creadas y primer canvas con contenido no vacío.
 
-### Estado
+### Publicación y estado
 
-- Implementación y validación local completas.
-- Publicación de `1.3.0`: pendiente de este cierre operativo.
+- Commit funcional `8a038b5` publicado en `main` de `censoescuelaspy/seguimiento_registros`.
+- Workflows `32608572406` y `32608571583`: finalizados con éxito.
+- GitHub Pages verificado en `1.3.0`; PDF.js y su worker respondieron HTTP 200.
+- Smoke test público: dos láminas renderizadas, canvas de 331 x 428 px con contenido y 0 errores de consola o página.
+- Estado operativo: la galería abre automáticamente las láminas PDF autorizadas y conserva el enlace al documento completo.
 
 ## 2026-08-22 - Vistas previas automáticas de evidencias 1.2.1
 
