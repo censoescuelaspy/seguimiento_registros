@@ -31,7 +31,11 @@ Mostrar para cada escuela el desglose de bloques, pisos, aulas y otros espacios,
 
 ### Publicación y estado
 
-- Código local verificado; commit, push, GitHub Pages y prueba integrada con el backend actualizado pendientes de este cierre.
+- Commit funcional `ac9dd24` publicado en `main` de `censoescuelaspy/seguimiento_registros`.
+- Workflows `32637682255` y `32637681495` finalizados con `success`.
+- Smoke test en GitHub Pages: versión `1.4.0`, 1 bloque, 2 espacios, 4 recortes y apertura enfocada en `Foto 1 - Aula 1`, sin errores de consola.
+- Backend estable verificado en `1.12.0`, esquema `2026-08-23.1`, deployment `@33`; las consultas anónimas al índice privado reciben `AUTH_REQUIRED`.
+- Estado operativo: frontend y backend publicados; queda pendiente solamente la conformidad del usuario dentro de una sesión autenticada real.
 
 ## 2026-08-22 - Galería de láminas fotográficas dentro de PDF 1.3.0
 
