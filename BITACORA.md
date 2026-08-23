@@ -24,7 +24,10 @@ Eliminar el paso manual **Cargar vista previa** y mostrar cada miniatura protegi
 
 ### Publicación
 
-- Pendiente de commit, push, workflows y verificación pública de `1.2.1`.
+- Commit funcional `90cf5d0` publicado en `main` de `censoescuelaspy/seguimiento_registros`.
+- Workflows `32606420630` y `32606420268`: finalizados con éxito, incluidas las pruebas Playwright y la publicación en GitHub Pages.
+- URL pública verificada en `1.2.1`: la miniatura apareció automáticamente, se descargó como imagen válida de 750 x 471 px y no existe el botón **Cargar vista previa**.
+- Smoke test público: 0 errores de consola o de página; el backend protegido respondió `ok: true` al control de salud.
 
 ## 2026-08-22 - Conciliación OCR de fotografías con RUE 1.2.0
 
