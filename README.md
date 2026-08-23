@@ -20,6 +20,8 @@ El login del frontend no protege archivos estáticos por sí solo. La protecció
 
 La vista **Evidencias** combina las cargas nativas de CIALPA Fotos con el archivo histórico conciliado por código RUE. Incluye imágenes y PDF y conserva visibles las escuelas con evidencia aunque todavía no tengan una ficha en la extracción RUE disponible. Los archivos se solicitan al backend solamente al abrirlos y no forman parte de la instantánea pública.
 
+Desde la versión `1.2.0`, el tablero informa la conciliación foto por foto realizada en la base privada: cantidad procesada, códigos MEC visibles, ubicaciones visibles, relaciones confirmadas y casos por revisar. La instantánea pública recibe únicamente esos conteos; no contiene texto OCR, fecha y hora de captura, coordenadas impresas ni rutas de archivos.
+
 ## Desarrollo
 
 ```powershell

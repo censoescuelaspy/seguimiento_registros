@@ -5,6 +5,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
+  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.2.0');
 }
 
 async function navigate(page, name) {
@@ -57,10 +58,14 @@ test('evidencias protegidas por escuela y especialidad', async ({ page }, testIn
   await login(page);
   await navigate(page, 'Evidencias');
   await expect(page.getByRole('heading', { name: 'Evidencias por escuela' })).toBeVisible();
+  await expect(page.locator('.notice').filter({ hasText: 'Relación foto-RUE' })).toContainText('74 de 74 fotos conciliadas');
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Fotos conciliadas con RUE' }).locator('strong')).toHaveText('74');
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Fotos por revisar' }).locator('strong')).toHaveText('0');
   await page.getByRole('button', { name: 'Electricidad', exact: true }).click();
   await expect(page.locator('.kpi-card').filter({ hasText: 'Evidencias autorizadas' }).locator('strong')).toHaveText('2');
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 203 PROFESOR CLETO ROMERO/i }).click();
   await expect(page.getByRole('tab', { name: 'Evidencias' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#drawer-content .detail-metric').filter({ hasText: 'Fotos vinculadas RUE' }).locator('strong')).toHaveText('74');
   await page.getByRole('button', { name: 'Cargar vista previa' }).click();
   await expect(page.locator('.photo-preview img')).toBeVisible();
   await page.getByRole('button', { name: 'Abrir imagen' }).click();

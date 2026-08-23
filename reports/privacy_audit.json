@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-22T15:02:46-03:00",
-  "schemaVersion": "2026-08-22.2",
+  "generatedAt": "2026-08-22T21:25:47-03:00",
+  "schemaVersion": "2026-08-22.3",
   "status": "PASS",
   "schools": 49,
   "forbiddenFindings": [],

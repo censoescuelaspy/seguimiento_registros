@@ -27,8 +27,17 @@ if (statusTotal !== snapshot.metrics.schools) throw new Error('Los estados no su
 if (snapshot.metrics.withCoordinates !== snapshot.schools.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)).length) {
   throw new Error('El control de coordenadas no coincide.');
 }
+if (snapshot.metrics.ocrPhotos !== snapshot.metrics.directPhotos) {
+  throw new Error('El total OCR no coincide con las fotos directas.');
+}
+if (snapshot.metrics.photoLinksConfirmed + snapshot.metrics.photoLinksReview !== snapshot.metrics.ocrPhotos) {
+  throw new Error('La conciliación foto-RUE no cubre todas las fotos OCR.');
+}
+if (snapshot.metrics.photoLinksConflict > snapshot.metrics.photoLinksReview) {
+  throw new Error('Los conflictos no están incluidos en los casos por revisar.');
+}
 
-const forbidden = [/[A-Za-z]:\\/, /docs\.google\.com/i, /drive\.google\.com/i, /"(?:token|cedula|codigo_censista|drive_url|ruta_absoluta|sha256)"\s*:/i];
+const forbidden = [/[A-Za-z]:\\/, /docs\.google\.com/i, /drive\.google\.com/i, /"(?:token|cedula|codigo_censista|drive_url|ruta_absoluta|sha256|texto_ocr|fecha_hora_ocr|latitud_ocr|longitud_ocr)"\s*:/i];
 for (const pattern of forbidden) {
   if (pattern.test(snapshotText)) throw new Error(`La instantánea contiene un patrón prohibido: ${pattern}`);
 }
@@ -38,4 +47,3 @@ for (const file of required.filter((item) => item.endsWith('.js'))) {
 }
 
 console.log(`Validación estática PASS: ${snapshot.schools.length} escuelas, versión ${version.version}.`);
-

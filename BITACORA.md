@@ -1,5 +1,45 @@
 # Bitácora
 
+## 2026-08-22 - Conciliación OCR de fotografías con RUE 1.2.0
+
+### Objetivo
+
+Relacionar cada fotografía histórica con su escuela RUE mediante los rótulos visibles de código MEC y coordenadas, sin modificar las imágenes originales ni publicar datos OCR, fechas o coordenadas visibles.
+
+### Implementación
+
+- La base maestra incorpora OCR local reproducible con RapidOCR y caché por hash de archivo, motor y versión del proceso.
+- La conciliación prioriza el código MEC exacto, usa la distancia entre las coordenadas visibles y las coordenadas RUE como validación espacial, y conserva como respaldo el mapeo controlado por carpeta.
+- Los códigos conocidos en conflicto nunca reemplazan automáticamente el vínculo controlado: quedan destinados a revisión.
+- DuckDB incorpora tablas y vistas de OCR, vínculos foto-RUE y casos para revisión; el Excel resumen agrega las hojas `OCR_FOTOS`, `VINCULOS_FOTO_RUE` y `OCR_REVISION`.
+- La instantánea pública expone solo totales sanitizados por escuela y agregados. No contiene texto OCR, fechas impresas, coordenadas detectadas, rutas locales ni identificadores privados.
+- El tablero muestra fotos conciliadas con RUE, pendientes de revisión y conflictos en la vista Evidencias y en el detalle de cada escuela.
+- Se incrementó frontend y caché PWA a `1.2.0`; el exportador usa el esquema `2026-08-22.3`.
+
+### Resultado verificado
+
+- 74 fotografías directas procesadas y 74 relaciones foto-RUE confirmadas.
+- 73 fotografías con código MEC visible y 69 con coordenadas visibles.
+- 69 vínculos confirmados por código y coordenadas, 4 por código y 1 por mapeo controlado porque la imagen no contiene rótulo visible.
+- 0 errores OCR, 0 conflictos y 0 casos pendientes de revisión.
+- Distancia máxima entre coordenada impresa y coordenada RUE: 40,09 m.
+- El código detectado en esta colección es `0012110`, correspondiente a la escuela vinculada por el inventario controlado.
+
+### Validación local
+
+- Compilación de los tres módulos Python: aprobada.
+- Reconstrucción completa de DuckDB, Excel y manifiesto: `PASS`.
+- Segunda ejecución con caché: 74 OCR y 30 PDF reutilizados; 0 reprocesamientos y 0 errores.
+- Validador independiente de OCR y vínculos: `PASS`.
+- Pruebas de datos: 2/2 aprobadas.
+- Validación estática y auditoría de privacidad: `PASS`, versión `1.2.0` y 49 escuelas.
+- Playwright en entorno limpio: 13 pruebas aprobadas y 1 omisión intencional, con cobertura de escritorio y móvil.
+- El `node_modules` de la carpeta sincronizada contenía un ejecutable vacío preexistente; las pruebas se ejecutaron sobre una instalación limpia con `npm ci` fuera de Drive.
+
+### Publicación
+
+- Pendiente de commit, push, finalización de workflows y verificación de la URL pública.
+
 ## 2026-08-22 - Evidencias históricas por escuela 1.1.0
 
 ### Objetivo

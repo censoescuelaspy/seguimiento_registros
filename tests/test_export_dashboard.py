@@ -34,6 +34,10 @@ class DashboardExportTest(unittest.TestCase):
             CREATE TABLE rue_eventos_tiempo AS SELECT 1 AS id;
             CREATE TABLE media_archivos AS SELECT 1 AS id, 'foto_directa' AS tipo_archivo;
             CREATE TABLE media_imagenes_directas AS SELECT 1 AS id;
+            CREATE TABLE media_imagenes_ocr(codigo_mec_ocr VARCHAR, latitud_ocr DOUBLE, longitud_ocr DOUBLE);
+            INSERT INTO media_imagenes_ocr VALUES ('0000001', -25.3, -57.6);
+            CREATE TABLE media_vinculos_foto_rue(requiere_revision BOOLEAN, estado_relacion VARCHAR);
+            INSERT INTO media_vinculos_foto_rue VALUES (FALSE, 'CONFIRMADO_CODIGO_COORDENADAS');
             CREATE TABLE media_pdf_documentos AS SELECT 1 AS id;
             CREATE TABLE media_pdf_paginas AS SELECT 1 AS id;
             CREATE TABLE actualizaciones(completed_at_asuncion VARCHAR);
@@ -51,7 +55,13 @@ class DashboardExportTest(unittest.TestCase):
             CREATE VIEW v_escuelas_resumen AS
               SELECT codigo_mec, 0 AS carpetas_medios, 0 AS archivos_medios, 0 AS fotos_directas,
                      0 AS reportes_pdf, 0 AS planos_dwg, 0 AS paginas_pdf,
-                     0 AS referencias_imagen_pdf, '' AS estados_vinculo
+                     0 AS referencias_imagen_pdf,
+                     CASE WHEN codigo_mec = '0000001' THEN 1 ELSE 0 END AS fotos_ocr,
+                     CASE WHEN codigo_mec = '0000001' THEN 1 ELSE 0 END AS fotos_con_codigo_ocr,
+                     CASE WHEN codigo_mec = '0000001' THEN 1 ELSE 0 END AS fotos_con_gps_visible,
+                     CASE WHEN codigo_mec = '0000001' THEN 1 ELSE 0 END AS fotos_relacion_confirmada,
+                     0 AS fotos_relacion_revision, 0 AS fotos_relacion_conflicto,
+                     '' AS estados_vinculo
               FROM rue_instituciones;
             """
         )
@@ -70,6 +80,8 @@ class DashboardExportTest(unittest.TestCase):
             self.assertEqual(written["metrics"]["closed"], 1)
             self.assertEqual(written["metrics"]["pilotSchoolsWithMedia"], 1)
             self.assertEqual(written["metrics"]["viewableHistoricalFiles"], 1)
+            self.assertEqual(written["metrics"]["photoLinksConfirmed"], 1)
+            self.assertEqual(written["schools"][0]["media"]["ocrCodeDetected"], 1)
             self.assertEqual(written["schools"][0]["blocks"][0]["observedMinutes"], 120)
             self.assertEqual(json.loads(audit.read_text(encoding="utf-8"))["status"], "PASS")
             self.assertEqual(EXPORT.privacy_findings(written), [])

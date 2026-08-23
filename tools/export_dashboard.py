@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "data" / "dashboard.json"
 DEFAULT_AUDIT = Path(__file__).resolve().parents[1] / "reports" / "privacy_audit.json"
 FORBIDDEN_KEYS = {
@@ -209,6 +209,12 @@ def build_snapshot(database: Path) -> dict[str, Any]:
               COALESCE(v.planos_dwg, 0) AS planos_dwg,
               COALESCE(v.paginas_pdf, 0) AS paginas_pdf,
               COALESCE(v.referencias_imagen_pdf, 0) AS referencias_imagen_pdf,
+              COALESCE(v.fotos_ocr, 0) AS fotos_ocr,
+              COALESCE(v.fotos_con_codigo_ocr, 0) AS fotos_con_codigo_ocr,
+              COALESCE(v.fotos_con_gps_visible, 0) AS fotos_con_gps_visible,
+              COALESCE(v.fotos_relacion_confirmada, 0) AS fotos_relacion_confirmada,
+              COALESCE(v.fotos_relacion_revision, 0) AS fotos_relacion_revision,
+              COALESCE(v.fotos_relacion_conflicto, 0) AS fotos_relacion_conflicto,
               COALESCE(v.estados_vinculo, '') AS estados_vinculo
             FROM rue_instituciones i
             LEFT JOIN v_escuelas_resumen v USING (codigo_mec)
@@ -308,6 +314,12 @@ def build_snapshot(database: Path) -> dict[str, Any]:
                         "cadPlans": integer(row["planos_dwg"]),
                         "pdfPages": integer(row["paginas_pdf"]),
                         "pdfImageReferences": integer(row["referencias_imagen_pdf"]),
+                        "ocrScanned": integer(row["fotos_ocr"]),
+                        "ocrCodeDetected": integer(row["fotos_con_codigo_ocr"]),
+                        "ocrGpsDetected": integer(row["fotos_con_gps_visible"]),
+                        "photoLinksConfirmed": integer(row["fotos_relacion_confirmada"]),
+                        "photoLinksReview": integer(row["fotos_relacion_revision"]),
+                        "photoLinksConflict": integer(row["fotos_relacion_conflicto"]),
                         "linkStatus": text(row["estados_vinculo"]),
                     },
                     "blocks": blocks.get(code, []),
@@ -371,6 +383,12 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             "mediaFiles": scalar(connection, "SELECT COUNT(*) FROM media_archivos"),
             "viewableHistoricalFiles": scalar(connection, "SELECT COUNT(*) FROM media_archivos WHERE tipo_archivo IN ('foto_directa', 'reporte_pdf')"),
             "directPhotos": scalar(connection, "SELECT COUNT(*) FROM media_imagenes_directas"),
+            "ocrPhotos": scalar(connection, "SELECT COUNT(*) FROM media_imagenes_ocr"),
+            "ocrCodesDetected": scalar(connection, "SELECT COUNT(*) FROM media_imagenes_ocr WHERE codigo_mec_ocr IS NOT NULL"),
+            "ocrGpsDetected": scalar(connection, "SELECT COUNT(*) FROM media_imagenes_ocr WHERE latitud_ocr IS NOT NULL AND longitud_ocr IS NOT NULL"),
+            "photoLinksConfirmed": scalar(connection, "SELECT COUNT(*) FROM media_vinculos_foto_rue WHERE NOT requiere_revision"),
+            "photoLinksReview": scalar(connection, "SELECT COUNT(*) FROM media_vinculos_foto_rue WHERE requiere_revision"),
+            "photoLinksConflict": scalar(connection, "SELECT COUNT(*) FROM media_vinculos_foto_rue WHERE estado_relacion LIKE 'CONFLICTO_%'"),
             "pdfDocuments": scalar(connection, "SELECT COUNT(*) FROM media_pdf_documentos"),
             "pdfPages": scalar(connection, "SELECT COUNT(*) FROM media_pdf_paginas"),
             "linksConfirmed": integer(link_counts.get("confirmado")),
@@ -390,7 +408,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         }
         metrics["scenarios"] = scenario_metrics(schools, closed_distribution)
         return {
-            "schemaVersion": "2026-08-22.2",
+            "schemaVersion": "2026-08-22.3",
             "appVersion": VERSION,
             "generatedAt": now.isoformat(),
             "cutoff": database_updated_at[:10] if database_updated_at else now.date().isoformat(),

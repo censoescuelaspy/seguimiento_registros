@@ -150,6 +150,12 @@ function archiveSchoolView(school) {
       cadPlans: 0,
       pdfPages: 0,
       pdfImageReferences: 0,
+      ocrScanned: 0,
+      ocrCodeDetected: 0,
+      ocrGpsDetected: 0,
+      photoLinksConfirmed: 0,
+      photoLinksReview: 0,
+      photoLinksConflict: 0,
       linkStatus: 'confirmado'
     },
     blocks: [],
@@ -580,24 +586,31 @@ function renderEvidenceView() {
     : archive.message
       ? `<div class="notice notice-error">${icon('circle-alert')}<span>${escapeHtml(archive.message)}</span></div>`
       : '';
+  const ocrMetrics = state.snapshot.metrics;
+  const ocrPending = ocrMetrics.photoLinksReview || 0;
+  const ocrConflicts = ocrMetrics.photoLinksConflict || 0;
+  const ocrNotice = ocrMetrics.ocrPhotos
+    ? `<div class="notice ${ocrPending ? 'notice-warning' : 'notice-success'}">${icon(ocrPending ? 'triangle-alert' : 'scan-text')}<span>Relación foto-RUE: ${formatNumber(ocrMetrics.photoLinksConfirmed)} de ${formatNumber(ocrMetrics.ocrPhotos)} fotos conciliadas; ${formatNumber(ocrMetrics.ocrCodesDetected)} códigos MEC y ${formatNumber(ocrMetrics.ocrGpsDetected)} ubicaciones leídos del rótulo visible. ${ocrPending ? `${formatNumber(ocrPending)} caso(s) requieren revisión${ocrConflicts ? `, incluidos ${formatNumber(ocrConflicts)} conflicto(s)` : ''}.` : 'Sin conflictos pendientes.'}</span></div>`
+    : '';
   elements.viewRoot.innerHTML = `
     ${viewHeading('Archivo fotográfico', 'Evidencias por escuela', 'Fotos y reportes históricos consultados con autorización; los archivos privados no forman parte de este sitio.', `<button class="button button-secondary" data-action="refresh-evidence">${icon('refresh-cw')} Actualizar</button>`)}
     ${state.remoteError ? `<div class="notice notice-error">${icon('circle-alert')}<span>${escapeHtml(state.remoteError)}</span></div>` : ''}
     ${archiveNotice}
+    ${ocrNotice}
     <section class="kpi-grid" aria-label="Indicadores de evidencias">
       ${kpiCard('Registros visibles', formatNumber(counts.records.length), scope, 'clipboard-list')}
       ${kpiCard('Evidencias autorizadas', formatNumber(counts.photos.length), categoryLabel(state.evidenceCategory), 'images', 'tone-accent')}
       ${kpiCard('Escuelas con evidencias', formatNumber(counts.schoolsWithPhotos), 'Dentro del acceso actual', 'school')}
       ${kpiCard('Escuelas piloto con medios', formatNumber(state.snapshot.metrics.pilotSchoolsWithMedia || linked), 'Inventario consolidado', 'folder-check')}
-      ${kpiCard('Vínculos confirmados', formatNumber(state.snapshot.metrics.linksConfirmed), 'Base maestra', 'link-2', 'tone-closed')}
-      ${kpiCard('Vínculos por revisar', formatNumber(state.snapshot.metrics.linksProbable + state.snapshot.metrics.linksUnlinked), 'Probables o aún no vinculados', 'unlink', 'tone-pending')}
+      ${kpiCard('Fotos conciliadas con RUE', formatNumber(state.snapshot.metrics.photoLinksConfirmed), 'Relación foto por foto', 'scan-text', 'tone-closed')}
+      ${kpiCard('Fotos por revisar', formatNumber(ocrPending), 'OCR o relación territorial', 'triangle-alert', 'tone-pending')}
     </section>
     <div class="evidence-toolbar">${categoryButtons('view')}<span class="scope-badge">${icon('shield-check', 15)}${escapeHtml(scope)}</span></div>
-    <div class="table-shell"><table class="data-table"><thead><tr><th>Escuela</th><th>Estado RUE</th><th class="numeric">Registros visibles</th><th class="numeric">Evidencias</th><th class="numeric">Medios inventariados</th><th>Última actividad</th></tr></thead><tbody>${schools.map((school) => {
+    <div class="table-shell"><table class="data-table"><thead><tr><th>Escuela</th><th>Estado RUE</th><th class="numeric">Registros visibles</th><th class="numeric">Evidencias</th><th class="numeric">Fotos vinculadas RUE</th><th class="numeric">Medios inventariados</th><th>Última actividad</th></tr></thead><tbody>${schools.map((school) => {
       const records = state.remoteIndex.recordsBySchool.get(school.code) || [];
       let photos = state.remoteIndex.photosBySchool.get(school.code) || [];
       photos = photos.filter((photo) => photoMatchesCategory(photo));
-      return `<tr><td class="school-cell"><button class="row-button" data-open-school="${school.code}"><strong>${escapeHtml(school.name)}</strong><small>MEC ${school.code} · ${escapeHtml(school.district)}</small></button></td><td>${statusPill(school)}</td><td class="numeric">${records.length}</td><td class="numeric"><strong>${photos.length}</strong></td><td class="numeric">${school.media.files}</td><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr>`;
+      return `<tr><td class="school-cell"><button class="row-button" data-open-school="${school.code}"><strong>${escapeHtml(school.name)}</strong><small>MEC ${school.code} · ${escapeHtml(school.district)}</small></button></td><td>${statusPill(school)}</td><td class="numeric">${records.length}</td><td class="numeric"><strong>${photos.length}</strong></td><td class="numeric">${school.media.photoLinksConfirmed || 0}</td><td class="numeric">${school.media.files}</td><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr>`;
     }).join('')}</tbody></table></div>
     ${schools.length ? '' : emptyState('Sin escuelas visibles', 'Cambie o restablezca los filtros.', 'search-x')}`;
   bindCategoryButtons(elements.viewRoot);
@@ -619,7 +632,7 @@ function renderMethodView() {
         <section id="method-source"><h2>Fuente y corte</h2><p>La instantánea procede de la base analítica CIALPA_RUE_FOTOS.duckdb y fue actualizada el ${escapeHtml(formatDate(state.snapshot.databaseUpdatedAt, true))}. Contiene ${formatNumber(metrics.schools)} escuelas y ${formatNumber(metrics.totalSubrecords)} subregistros consolidados.</p></section>
         <section id="method-status"><h2>Estados</h2><p><strong>Cerrado en campo</strong> es avance definitivo. <strong>Guardado en campo</strong> representa carga iniciada que aún requiere cierre. <strong>Pendiente</strong> no posee cierre registrado. El avance operativo suma cerradas y guardadas, pero no sustituye al definitivo.</p></section>
         <section id="method-time"><h2>Tiempos observados</h2><p>Los eventos del RUE se agrupan en sesiones separadas por pausas de ${formatNumber(state.snapshot.assumptions.sessionGapMinutes)} minutos. Las estimaciones usan escuelas cerradas: escenario bajo Q1, central mediana y alto Q3. El saldo agrega ${formatPercent(state.snapshot.assumptions.contingencyRate * 100, 0)} por revisión y contingencias.</p><p>${escapeHtml(state.snapshot.assumptions.timeScope)}</p></section>
-        <section id="method-media"><h2>Evidencias</h2><p>La base maestra inventaría fotos, PDF y planos sin copiarlos al tablero. Los conteos distinguen vínculos confirmados, probables y no vinculados. La galería de CIALPA Fotos solicita cada imagen al backend únicamente después de validar la sesión.</p></section>
+        <section id="method-media"><h2>Evidencias</h2><p>La base maestra inventaría fotos, PDF y planos sin copiarlos al tablero. En las fotos directas, un OCR local lee el código MEC, la fecha, las coordenadas y el nombre impresos; el código relaciona la imagen con RUE y la distancia geográfica verifica la coincidencia. Los conflictos nunca reemplazan un vínculo controlado y quedan para revisión. La galería solicita cada archivo al backend únicamente después de validar la sesión.</p></section>
         <section id="method-update"><h2>Actualización</h2><p>Los registros y fotos de CIALPA Fotos se refrescan durante la sesión. El RUE y sus tiempos se actualizan cuando el equipo autorizado recompila la base maestra, genera una nueva instantánea sanitizada y publica una nueva versión.</p></section>
         <section id="method-security"><h2>Seguridad</h2><p>El repositorio público no contiene respuestas RUE, usuarios, cédulas, rutas privadas, enlaces de Drive, hashes ni binarios. El alcance de las evidencias lo decide Apps Script: administrador para todo el archivo; supervisor y encuestador para los registros permitidos por su equipo.</p></section>
       </article>
@@ -681,7 +694,7 @@ function renderDrawerSummary(school) {
       <div class="detail-metric"><span>Bloques y plantas</span><strong>${school.counts.blocksAndFloors}</strong></div><div class="detail-metric"><span>Aulas</span><strong>${school.counts.classrooms}</strong></div><div class="detail-metric"><span>Sanitarios</span><strong>${school.counts.sanitarySpaces}</strong></div><div class="detail-metric"><span>Dependencias</span><strong>${school.counts.dependencies}</strong></div><div class="detail-metric"><span>Laboratorios</span><strong>${school.counts.laboratories}</strong></div><div class="detail-metric"><span>Talleres</span><strong>${school.counts.workshops}</strong></div>
     </div></section>
     <section class="detail-section"><h3>Fechas y medios</h3><table class="mini-table"><tbody>
-      <tr><th>Inicio RUE</th><td>${escapeHtml(formatDate(school.startedDate))}</td></tr><tr><th>Última actividad</th><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr><tr><th>Fotos directas</th><td>${school.media.directPhotos}</td></tr><tr><th>PDF / páginas</th><td>${school.media.pdfReports} / ${formatNumber(school.media.pdfPages)}</td></tr><tr><th>Estado del vínculo</th><td>${escapeHtml(school.media.linkStatus || 'Sin vínculo')}</td></tr>
+      <tr><th>Inicio RUE</th><td>${escapeHtml(formatDate(school.startedDate))}</td></tr><tr><th>Última actividad</th><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr><tr><th>Fotos directas</th><td>${school.media.directPhotos}</td></tr><tr><th>Fotos relacionadas con RUE</th><td>${school.media.photoLinksConfirmed || 0}${school.media.photoLinksReview ? ` · revisar ${school.media.photoLinksReview}` : ''}</td></tr><tr><th>Rótulos leídos</th><td>${school.media.ocrCodeDetected || 0} códigos / ${school.media.ocrGpsDetected || 0} ubicaciones</td></tr><tr><th>PDF / páginas</th><td>${school.media.pdfReports} / ${formatNumber(school.media.pdfPages)}</td></tr><tr><th>Estado del vínculo</th><td>${escapeHtml(school.media.linkStatus || 'Sin vínculo')}</td></tr>
     </tbody></table></section>
     <div class="detail-actions"><button class="button button-primary" data-drawer-action="evidence">${icon('images')} Ver evidencias</button>${school.archiveOnly ? '' : `<button class="button button-secondary" data-drawer-action="map">${icon('map-pin')} Ubicar en mapa</button>`}<a class="button button-secondary" href="${safeExternalMapUrl(school)}" target="_blank" rel="noopener">${icon('external-link')} Google Maps</a></div>`;
 }
@@ -700,7 +713,7 @@ function renderDrawerEvidence(school) {
   const photoIds = new Set(photos.map((photo) => photo.fotoId));
   return `
     <div class="evidence-toolbar">${categoryButtons('drawer')}</div>
-    <div class="detail-metrics"><div class="detail-metric"><span>Registros visibles</span><strong>${records.length}</strong></div><div class="detail-metric"><span>Evidencias</span><strong>${photos.length}</strong></div><div class="detail-metric"><span>Medios inventariados</span><strong>${school.media.files}</strong></div></div>
+    <div class="detail-metrics"><div class="detail-metric"><span>Registros visibles</span><strong>${records.length}</strong></div><div class="detail-metric"><span>Evidencias</span><strong>${photos.length}</strong></div><div class="detail-metric"><span>Fotos vinculadas RUE</span><strong>${school.media.photoLinksConfirmed || 0}</strong></div><div class="detail-metric"><span>Medios inventariados</span><strong>${school.media.files}</strong></div></div>
     ${records.length ? records.map((record) => {
       const recordPhotos = (state.remoteIndex.photosByRecord.get(record.recordKey) || []).filter((photo) => photoIds.has(photo.fotoId));
       const context = record.source === 'ARCHIVO_HISTORICO'
