@@ -37,10 +37,12 @@ Corregir el universo del tablero y evitar que las 49 fichas RUE descargadas se i
 - Revisión visual de capturas de resumen, mapa y vista móvil: sin solapamientos ni controles truncados después del ajuste responsive.
 - La copia local de `node_modules` en la unidad sincronizada tenía un `package.json` inválido; la aplicación se verificó con `npm ci` en una copia temporal limpia, sin modificar dependencias del proyecto.
 
-### Estado antes de publicación
+### Publicación y estado
 
-- Cambio funcional validado y listo para commit y publicación en `production/main`.
-- La URL pública todavía conserva la versión anterior hasta finalizar el despliegue de GitHub Pages.
+- Commit funcional `5759c03` publicado en `production/main` de `censoescuelaspy/seguimiento_registros`.
+- Workflows `33024270557` y `33024269753`: finalizados correctamente, incluidas pruebas, artefacto y despliegue de GitHub Pages.
+- Verificación pública con caché evitada: versión `1.6.0`, 85 sedes, 86 códigos MEC, 49 fichas RUE, 85 marcadores generales y 37 al filtrar **Sin ficha RUE**.
+- Smoke test público en navegador nuevo: login de simulación, KPI, filtro y mapa operativos; cero errores de página y cero solicitudes fallidas.
 
 ## 2026-08-23 - Carga rápida de fotos PDF 1.5.0
 
