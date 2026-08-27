@@ -44,7 +44,10 @@ Incorporar el último corte de los cinco perfiles RUE y convertir los tiempos ob
 ### Estado de publicación
 
 - Instantánea generada con corte 2026-08-27 y privacidad `PASS`.
-- Publicación en `production/main` y verificación de GitHub Pages pendientes del cierre de esta intervención.
+- Commit funcional `f1f9ea9` publicado en `production/main` de `censoescuelaspy/seguimiento_registros`.
+- Workflows `33064781429` y `33064780539`: finalizados correctamente, incluida la suite completa y el despliegue de GitHub Pages.
+- Verificación HTTP sin caché: versión `1.7.0`, esquema `2026-08-27.1`, corte 2026-08-27, 85 sedes, 86 fichas piloto, 88 fichas extraídas y 2 fuera de muestra.
+- Smoke test público en navegador nuevo: login de simulación, resumen y planificación operativos en escritorio y celular; cero errores de página, cero solicitudes internas fallidas y cero desbordamiento horizontal.
 
 ## 2026-08-26 - Muestra completa y cobertura RUE 1.6.0
 
