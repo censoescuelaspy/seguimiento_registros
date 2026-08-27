@@ -6,10 +6,11 @@ let markers = new Map();
 
 function markerIcon(school, selectedCode) {
   const selected = school.code === selectedCode ? ' selected' : '';
+  const rueCoverage = school.rueAvailable === false ? ' no-rue' : school.rueCoverageKey === 'partial' ? ' partial-rue' : '';
   const size = selected ? 29 : 22;
   return L.divIcon({
     className: '',
-    html: `<span class="school-marker ${school.statusKey}${selected}" aria-hidden="true"></span>`,
+    html: `<span class="school-marker ${school.statusKey}${rueCoverage}${selected}" aria-hidden="true"></span>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2]
   });
@@ -45,7 +46,13 @@ export function updateSchoolMap(schools, onSelect, selectedCode = '', fit = fals
       title: school.name,
       riseOnHover: true
     });
-    marker.bindPopup(`<div class="map-popup"><strong>${escapeHtml(school.name)}</strong><span>MEC ${escapeHtml(school.code)} · ${escapeHtml(school.district)}</span><small>${escapeHtml(statusLabel(school.statusKey))} · ${escapeHtml(formatMinutes(school.observedMinutes))}</small></div>`);
+    const codes = (Array.isArray(school.codes) && school.codes.length ? school.codes : [school.code]).join(' / ');
+    const status = school.rueAvailable === false
+      ? 'Sin ficha RUE extraída'
+      : school.rueCoverageKey === 'partial'
+        ? `${statusLabel(school.statusKey)} · cobertura RUE parcial`
+        : statusLabel(school.statusKey);
+    marker.bindPopup(`<div class="map-popup"><strong>${escapeHtml(school.name)}</strong><span>MEC ${escapeHtml(codes)} · ${escapeHtml(school.district)}</span><small>${escapeHtml(status)} · ${escapeHtml(formatMinutes(school.observedMinutes))}</small></div>`);
     marker.on('click', () => onSelect(school.code));
     marker.addTo(markerLayer);
     markers.set(school.code, marker);
@@ -75,4 +82,3 @@ export function destroySchoolMap() {
   markerLayer = null;
   markers = new Map();
 }
-

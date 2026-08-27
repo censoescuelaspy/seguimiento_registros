@@ -1,5 +1,47 @@
 # Bitácora
 
+## 2026-08-26 - Muestra completa y cobertura RUE 1.6.0
+
+### Objetivo
+
+Corregir el universo del tablero y evitar que las 49 fichas RUE descargadas se interpreten como el total de escuelas asignadas.
+
+### Diagnóstico
+
+- El tablero anterior partía de `rue_instituciones` y por eso mostraba solo 49 códigos con extracción RUE.
+- La muestra vigente contiene 86 códigos MEC agrupados en 85 sedes físicas; una sede comparte ubicación entre dos códigos.
+- Las 49 fichas RUE corresponden a 48 sedes físicas, por lo que 37 sedes de la muestra todavía no poseen ficha descargada.
+
+### Implementación
+
+- El exportador parte ahora del catálogo completo, agrupa por `sitio_id` y combina estado, tiempos, infraestructura y medios de todos los códigos de cada sede.
+- La interfaz separa sedes físicas, códigos MEC y cobertura RUE; incorpora el filtro **Cobertura RUE** y una señal específica para sedes sin ficha.
+- El mapa presenta 85 marcadores y diferencia visualmente las 37 sedes sin extracción RUE.
+- La búsqueda, la ficha, las evidencias y el CSV reconocen códigos múltiples y agregan correctamente los registros de una sede compartida.
+- Las estimaciones se calculan sobre las 85 sedes pendientes, guardadas o cerradas y el control de equipos inicia en ocho equipos operativos.
+- Se actualizó frontend, esquema público y caché PWA a `1.6.0`.
+
+### Datos y seguridad
+
+- Corte de base: 2026-08-23; instantánea regenerada el 2026-08-26.
+- Resultado: 85 sedes, 86 códigos MEC, 49 códigos RUE en 48 sedes, 37 sedes sin ficha, 13 cerradas, 10 guardadas y 62 pendientes.
+- `reports/privacy_audit.json`: `PASS`, sin rutas privadas, credenciales, enlaces de Drive, correos ni campos prohibidos.
+- El procedimiento diario detallado quedó en el área privada de la base maestra y no se incorporó al repositorio público.
+
+### Validación local
+
+- Pruebas del exportador: 2 aprobadas, incluida sede compartida, cobertura parcial y sede sin ficha.
+- Validación estática: `PASS` para 85 sedes, 86 códigos y versión `1.6.0`.
+- Playwright en instalación temporal limpia: 13 pruebas aprobadas y 1 omisión intencional; escritorio y celular.
+- Cobertura: KPI, filtros, 85 marcadores, 37 marcadores sin RUE, mapa satelital, sedes compartidas, tiempos, evidencias, PDF, accesibilidad y ausencia de desbordamiento móvil.
+- Revisión visual de capturas de resumen, mapa y vista móvil: sin solapamientos ni controles truncados después del ajuste responsive.
+- La copia local de `node_modules` en la unidad sincronizada tenía un `package.json` inválido; la aplicación se verificó con `npm ci` en una copia temporal limpia, sin modificar dependencias del proyecto.
+
+### Estado antes de publicación
+
+- Cambio funcional validado y listo para commit y publicación en `production/main`.
+- La URL pública todavía conserva la versión anterior hasta finalizar el despliegue de GitHub Pages.
+
 ## 2026-08-23 - Carga rápida de fotos PDF 1.5.0
 
 ### Objetivo

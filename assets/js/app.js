@@ -25,12 +25,12 @@ const state = {
   remoteIndex: indexRemoteData(),
   remoteError: '',
   view: allowedViews.has(location.hash.slice(1)) ? location.hash.slice(1) : 'overview',
-  filters: { search: '', department: '', district: '', status: '', media: '' },
+  filters: { search: '', department: '', district: '', status: '', rue: '', media: '' },
   sort: { key: 'name', direction: 'asc' },
   selectedSchoolCode: '',
   drawerTab: 'summary',
   evidenceCategory: 'all',
-  teamCount: 5,
+  teamCount: 8,
   photoUrls: new Map(),
   photoRequests: new Map(),
   previewObserver: null,
@@ -56,6 +56,7 @@ const elements = {
   filterDepartment: document.getElementById('filter-department'),
   filterDistrict: document.getElementById('filter-district'),
   filterStatus: document.getElementById('filter-status'),
+  filterRue: document.getElementById('filter-rue'),
   filterMedia: document.getElementById('filter-media'),
   filterCount: document.getElementById('filter-count'),
   drawer: document.getElementById('detail-drawer'),
@@ -105,7 +106,27 @@ function setBusy(button, busy) {
 }
 
 function statusPill(school) {
-  return `<span class="status-pill status-${school.statusKey}">${escapeHtml(statusLabel(school.statusKey))}</span>`;
+  const missingRue = school.rueAvailable === false;
+  const style = missingRue ? 'archive' : school.statusKey;
+  const label = missingRue ? 'Sin ficha RUE extraída' : statusLabel(school.statusKey);
+  return `<span class="status-pill status-${style}">${escapeHtml(label)}</span>`;
+}
+
+function schoolCodes(school) {
+  const values = Array.isArray(school?.codes) && school.codes.length ? school.codes : [school?.code];
+  return [...new Set(values.map(normalizeCode).filter(Boolean))];
+}
+
+function schoolCodeLabel(school) {
+  return schoolCodes(school).join(' / ');
+}
+
+function schoolStatusLabel(school) {
+  return school.rueAvailable === false ? 'Sin ficha RUE extraída' : statusLabel(school.statusKey);
+}
+
+function remoteItemsForSchool(index, school) {
+  return schoolCodes(school).flatMap((code) => index.get(code) || []);
 }
 
 function viewHeading(eyebrow, title, description, actions = '') {
@@ -132,12 +153,19 @@ function archiveSchoolView(school) {
   ].filter(Boolean).sort();
   return {
     code,
+    codes: [code],
+    siteId: `ARCHIVE-${code}`,
+    sharedSite: false,
     name: school.nombre || `Escuela MEC ${code}`,
     department: school.departamento || '',
     district: school.distrito || '',
     locality: school.localidad || '',
     status: 'Sin registro RUE extraído',
     statusKey: 'archive',
+    rueCoverageKey: 'none',
+    rueAvailable: false,
+    rueCodeCount: 0,
+    expectedRueCodeCount: 1,
     startedDate: '',
     updatedDate: dates.at(-1) || '',
     firstActivityAt: dates[0] || '',
@@ -175,7 +203,7 @@ function archiveSchoolView(school) {
 
 function allKnownSchools() {
   const schools = [...(state.snapshot?.schools || [])];
-  const known = new Set(schools.map((school) => school.code));
+  const known = new Set(schools.flatMap(schoolCodes));
   (state.remote.schools || []).forEach((school) => {
     const code = normalizeCode(school.codigoRue || school.codigo);
     if (!code || known.has(code)) return;
@@ -191,12 +219,12 @@ function filteredEvidenceSchools() {
 
 function findSchool(code) {
   const canonical = normalizeCode(code);
-  return allKnownSchools().find((school) => school.code === canonical) || null;
+  return allKnownSchools().find((school) => schoolCodes(school).includes(canonical)) || null;
 }
 
 function updateFilterCount() {
   const count = state.view === 'evidence' ? filteredEvidenceSchools().length : filteredSchools().length;
-  elements.filterCount.value = `${count} ${count === 1 ? 'escuela' : 'escuelas'}`;
+  elements.filterCount.value = `${count} ${count === 1 ? 'sede' : 'sedes'}`;
   elements.filterCount.textContent = elements.filterCount.value;
 }
 
@@ -406,14 +434,16 @@ function renderOverview(schools) {
       || Number(a.counts.events || 0) - Number(b.counts.events || 0)
       || a.name.localeCompare(b.name, 'es');
   }).slice(0, 6);
-  const scope = schools.length === (state.snapshot?.schools || []).length ? 'muestra visible' : 'selección filtrada';
+  const scope = schools.length === (state.snapshot?.schools || []).length ? 'muestra completa' : 'selección filtrada';
   elements.viewRoot.innerHTML = `
-    ${viewHeading('Control operativo', 'Resumen del avance', 'Estado consolidado del RUE, actividad observada y disponibilidad de medios por escuela.', `<span class="data-stamp"><span>Alcance actual</span><strong>${schools.length} escuelas</strong></span>`)}
+    ${viewHeading('Control operativo', 'Resumen del avance', 'Avance sobre las sedes físicas de la muestra, con cobertura RUE y medios vinculados.', `<span class="data-stamp"><span>Alcance actual</span><strong>${schools.length} sedes</strong></span>`)}
     <section class="kpi-grid" aria-label="Indicadores principales">
-      ${kpiCard('Escuelas', formatNumber(summary.total), scope, 'school')}
+      ${kpiCard('Sedes de la muestra', formatNumber(summary.total), scope, 'school')}
+      ${kpiCard('Códigos MEC', formatNumber(summary.institutionCodes), 'Una sede posee dos códigos', 'hash')}
+      ${kpiCard('Fichas RUE', `${formatNumber(summary.rueInstitutionCodes)}/${formatNumber(summary.institutionCodes)}`, `${formatNumber(summary.withRue)} sedes con ficha`, 'database')}
       ${kpiCard('Cerradas', formatNumber(summary.closed), `${formatPercent(summary.definitiveProgress)} definitivo`, 'circle-check-big', 'tone-closed')}
       ${kpiCard('Guardadas', formatNumber(summary.saved), 'Carga iniciada, pendiente de cierre', 'save', 'tone-saved')}
-      ${kpiCard('Pendientes', formatNumber(summary.pending), 'Sin cierre registrado', 'circle-dashed', 'tone-pending')}
+      ${kpiCard('Pendientes', formatNumber(summary.pending), `${formatNumber(summary.withoutRue)} sin ficha RUE`, 'circle-dashed', 'tone-pending')}
       ${kpiCard('Tiempo observado', formatHours(summary.observedHours), 'Sesiones registradas en RUE', 'clock-3', 'tone-accent')}
       ${kpiCard('Con medios', `${formatNumber(summary.withMedia)}/${formatNumber(summary.total)}`, 'Fotos, PDF o planos vinculados', 'images')}
     </section>
@@ -424,7 +454,7 @@ function renderOverview(schools) {
         ${districts.length ? `<div class="table-shell"><table class="data-table"><thead><tr><th>Departamento / distrito</th><th class="numeric">Total</th><th class="numeric">Cerradas</th><th class="numeric">Guardadas</th><th class="numeric">Pendientes</th></tr></thead><tbody>${districts.slice(0, 12).map((item) => `<tr><td><strong>${escapeHtml(item.district)}</strong><small>${escapeHtml(item.department)}</small></td><td class="numeric">${item.total}</td><td class="numeric">${item.closed}</td><td class="numeric">${item.saved}</td><td class="numeric">${item.pending}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Sin distritos visibles', 'Cambie o restablezca los filtros.', 'map-pinned')}
       </article>
       <article class="panel"><header class="panel-header"><div><h2>Prioridad inmediata</h2><p>Pendientes sin actividad y guardadas por cerrar.</p></div></header>
-        <div class="priority-list">${priority.map((school, index) => `<button class="row-button priority-item" data-open-school="${school.code}"><span class="priority-rank">${index + 1}</span><span><strong>${escapeHtml(school.name)}</strong><small>${escapeHtml(school.district)} · MEC ${school.code}</small></span>${statusPill(school)}</button>`).join('') || emptyState('Sin escuelas visibles', 'Cambie o restablezca los filtros.', 'search-x')}</div>
+        <div class="priority-list">${priority.map((school, index) => `<button class="row-button priority-item" data-open-school="${school.code}"><span class="priority-rank">${index + 1}</span><span><strong>${escapeHtml(school.name)}</strong><small>${escapeHtml(school.district)} · MEC ${escapeHtml(schoolCodeLabel(school))}</small></span>${statusPill(school)}</button>`).join('') || emptyState('Sin sedes visibles', 'Cambie o restablezca los filtros.', 'search-x')}</div>
       </article>
     </section>`;
   renderOverviewCharts(schools);
@@ -432,7 +462,7 @@ function renderOverview(schools) {
 }
 
 function renderMapView(schools) {
-  const options = schools.map((school) => `<option value="${school.code}" ${school.code === state.selectedSchoolCode ? 'selected' : ''}>${escapeHtml(school.code)} · ${escapeHtml(school.name)}</option>`).join('');
+  const options = schools.map((school) => `<option value="${school.code}" ${school.code === state.selectedSchoolCode ? 'selected' : ''}>${escapeHtml(schoolCodeLabel(school))} · ${escapeHtml(school.name)}</option>`).join('');
   elements.viewRoot.innerHTML = `
     ${viewHeading('Territorio', 'Mapa de escuelas', 'Explore el avance sobre calles o imagen satelital. La navegación rápida recorre únicamente las escuelas filtradas.')}
     <section class="map-layout">
@@ -446,6 +476,7 @@ function renderMapView(schools) {
           <span class="legend-item"><i class="legend-dot closed"></i>Cerrada</span>
           <span class="legend-item"><i class="legend-dot saved"></i>Guardada</span>
           <span class="legend-item"><i class="legend-dot pending"></i>Pendiente</span>
+          <span class="legend-item"><i class="legend-dot no-rue"></i>Sin ficha RUE</span>
         </div>
       </div>
       <div id="school-map" aria-label="Mapa de escuelas"></div>
@@ -494,7 +525,7 @@ function renderSchoolsView(schools) {
       <th>${sortHeader('Estado', 'status')}</th><th class="numeric">${sortHeader('Tiempo', 'time')}</th><th class="numeric">${sortHeader('Subregistros', 'subrecords')}</th>
       <th class="numeric">${sortHeader('Medios', 'media')}</th><th>${sortHeader('Última actividad', 'updated')}</th>
     </tr></thead><tbody>${sorted.map((school) => `<tr class="${school.code === state.selectedSchoolCode ? 'is-selected' : ''}">
-      <td><button class="row-button" data-open-school="${school.code}"><strong>${school.code}</strong></button></td>
+      <td><button class="row-button" data-open-school="${school.code}"><strong>${escapeHtml(schoolCodeLabel(school))}</strong></button></td>
       <td class="school-cell"><button class="row-button" data-open-school="${school.code}"><strong>${escapeHtml(school.name)}</strong><small>${escapeHtml(school.locality || 'Sin localidad')}</small></button></td>
       <td>${escapeHtml(school.district)}<small>${escapeHtml(school.department)}</small></td><td>${statusPill(school)}</td>
       <td class="numeric">${escapeHtml(formatMinutes(school.observedMinutes))}</td><td class="numeric">${formatNumber(school.counts.subrecords)}</td>
@@ -513,9 +544,10 @@ function renderSchoolsView(schools) {
 
 function exportSchoolsCsv(schools) {
   const rows = [
-    ['codigo_mec', 'escuela', 'departamento', 'distrito', 'localidad', 'estado', 'tiempo_observado_min', 'subregistros', 'medios', 'ultima_actividad'],
+    ['sitio_id', 'codigos_mec', 'escuela', 'departamento', 'distrito', 'localidad', 'estado', 'cobertura_rue', 'fichas_rue', 'fichas_esperadas', 'tiempo_observado_min', 'subregistros', 'medios', 'ultima_actividad'],
     ...schools.map((school) => [
-      school.code, school.name, school.department, school.district, school.locality, school.status,
+      school.siteId, schoolCodeLabel(school), school.name, school.department, school.district, school.locality, school.status,
+      school.rueCoverageKey, school.rueCodeCount, school.expectedRueCodeCount,
       school.observedMinutes || '', school.counts.subrecords, school.media.files, school.lastActivityAt || school.updatedDate
     ])
   ];
@@ -556,7 +588,7 @@ function renderTimesView(schools) {
       </article>
       <article class="panel"><header class="panel-header"><div><h2>Mayor saldo estimado</h2><p>Escenario central para la selección actual.</p></div></header><div class="priority-list">${priority.slice(0, 7).map((school, index) => {
         const remaining = school.statusKey === 'pending' ? central.targetMinutes : Math.max(central.targetMinutes - Number(school.observedMinutes || 0), 0);
-        return `<button class="row-button priority-item" data-open-school="${school.code}"><span class="priority-rank">${index + 1}</span><span><strong>${escapeHtml(school.name)}</strong><small>${escapeHtml(school.district)} · ${statusLabel(school.statusKey)}</small></span><strong>${formatMinutes(remaining)}</strong></button>`;
+        return `<button class="row-button priority-item" data-open-school="${school.code}"><span class="priority-rank">${index + 1}</span><span><strong>${escapeHtml(school.name)}</strong><small>${escapeHtml(school.district)} · ${escapeHtml(schoolStatusLabel(school))}</small></span><strong>${formatMinutes(remaining)}</strong></button>`;
       }).join('') || emptyState('Sin saldo pendiente', 'Todas las escuelas visibles están cerradas.', 'badge-check')}</div></article>
     </section>`;
   renderTimeCharts(visibleTimeMetrics, scenarios);
@@ -579,14 +611,14 @@ function photoMatchesCategory(photo, category = state.evidenceCategory) {
 }
 
 function evidenceCounts(schools) {
-  const codes = new Set(schools.map((school) => school.code));
+  const codes = new Set(schools.flatMap(schoolCodes));
   const records = (state.remote.records || []).filter((record) => codes.has(normalizeCode(record.codigoRue || record.codigoEscuela)));
   let photos = (state.remote.photos || []).filter((photo) => codes.has(normalizeCode(photo.codigoRue || photo.codigoEscuela)));
   photos = photos.filter((photo) => photoMatchesCategory(photo));
   return {
     records,
     photos,
-    schoolsWithPhotos: new Set(photos.map((photo) => normalizeCode(photo.codigoRue || photo.codigoEscuela))).size
+    schoolsWithPhotos: schools.filter((school) => remoteItemsForSchool(state.remoteIndex.photosBySchool, school).some((photo) => photoMatchesCategory(photo))).length
   };
 }
 
@@ -626,10 +658,10 @@ function renderEvidenceView() {
     </section>
     <div class="evidence-toolbar">${categoryButtons('view')}<span class="scope-badge">${icon('shield-check', 15)}${escapeHtml(scope)}</span></div>
     <div class="table-shell"><table class="data-table"><thead><tr><th>Escuela</th><th>Estado RUE</th><th class="numeric">Registros visibles</th><th class="numeric">Evidencias</th><th class="numeric">Fotos vinculadas RUE</th><th class="numeric">Medios inventariados</th><th>Última actividad</th></tr></thead><tbody>${schools.map((school) => {
-      const records = state.remoteIndex.recordsBySchool.get(school.code) || [];
-      let photos = state.remoteIndex.photosBySchool.get(school.code) || [];
+      const records = remoteItemsForSchool(state.remoteIndex.recordsBySchool, school);
+      let photos = remoteItemsForSchool(state.remoteIndex.photosBySchool, school);
       photos = photos.filter((photo) => photoMatchesCategory(photo));
-      return `<tr><td class="school-cell"><button class="row-button" data-open-school="${school.code}"><strong>${escapeHtml(school.name)}</strong><small>MEC ${school.code} · ${escapeHtml(school.district)}</small></button></td><td>${statusPill(school)}</td><td class="numeric">${records.length}</td><td class="numeric"><strong>${photos.length}</strong></td><td class="numeric">${school.media.photoLinksConfirmed || 0}</td><td class="numeric">${school.media.files}</td><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr>`;
+      return `<tr><td class="school-cell"><button class="row-button" data-open-school="${school.code}"><strong>${escapeHtml(school.name)}</strong><small>MEC ${escapeHtml(schoolCodeLabel(school))} · ${escapeHtml(school.district)}</small></button></td><td>${statusPill(school)}</td><td class="numeric">${records.length}</td><td class="numeric"><strong>${photos.length}</strong></td><td class="numeric">${school.media.photoLinksConfirmed || 0}</td><td class="numeric">${school.media.files}</td><td>${escapeHtml(formatDate(school.lastActivityAt || school.updatedDate, true))}</td></tr>`;
     }).join('')}</tbody></table></div>
     ${schools.length ? '' : emptyState('Sin escuelas visibles', 'Cambie o restablezca los filtros.', 'search-x')}`;
   bindCategoryButtons(elements.viewRoot);
@@ -648,8 +680,8 @@ function renderMethodView() {
     <section class="method-grid">
       <nav class="method-index" aria-label="Secciones del método"><a href="#method-source">Fuente</a><a href="#method-status">Estados</a><a href="#method-time">Tiempos</a><a href="#method-media">Evidencias</a><a href="#method-update">Actualización</a><a href="#method-security">Seguridad</a></nav>
       <article class="panel method-content">
-        <section id="method-source"><h2>Fuente y corte</h2><p>La instantánea procede de la base analítica CIALPA_RUE_FOTOS.duckdb y fue actualizada el ${escapeHtml(formatDate(state.snapshot.databaseUpdatedAt, true))}. Contiene ${formatNumber(metrics.schools)} escuelas y ${formatNumber(metrics.totalSubrecords)} subregistros consolidados.</p></section>
-        <section id="method-status"><h2>Estados</h2><p><strong>Cerrado en campo</strong> es avance definitivo. <strong>Guardado en campo</strong> representa carga iniciada que aún requiere cierre. <strong>Pendiente</strong> no posee cierre registrado. El avance operativo suma cerradas y guardadas, pero no sustituye al definitivo.</p></section>
+        <section id="method-source"><h2>Fuente y corte</h2><p>La instantánea procede de la base analítica CIALPA_RUE_FOTOS.duckdb y fue actualizada el ${escapeHtml(formatDate(state.snapshot.databaseUpdatedAt, true))}. La muestra contiene ${formatNumber(metrics.physicalSites || metrics.schools)} sedes físicas y ${formatNumber(metrics.institutionCodes || metrics.pilotSchools)} códigos MEC. Al corte existen fichas RUE descargadas para ${formatNumber(metrics.ruePhysicalSites || 0)} sedes (${formatNumber(metrics.rueInstitutionCodes || 0)} códigos) y ${formatNumber(metrics.withoutRueRecord || 0)} sedes todavía no poseen una ficha extraída.</p></section>
+        <section id="method-status"><h2>Estados</h2><p><strong>Cerrado en campo</strong> es avance definitivo. <strong>Guardado en campo</strong> representa carga iniciada que aún requiere cierre. <strong>Pendiente</strong> no posee cierre registrado. <strong>Sin ficha RUE extraída</strong> identifica una sede incluida en la muestra cuyos datos todavía no fueron descargados; no significa que esté fuera de la planificación.</p></section>
         <section id="method-time"><h2>Tiempos observados</h2><p>Los eventos del RUE se agrupan en sesiones separadas por pausas de ${formatNumber(state.snapshot.assumptions.sessionGapMinutes)} minutos. Las estimaciones usan escuelas cerradas: escenario bajo Q1, central mediana y alto Q3. El saldo agrega ${formatPercent(state.snapshot.assumptions.contingencyRate * 100, 0)} por revisión y contingencias.</p><p>${escapeHtml(state.snapshot.assumptions.timeScope)}</p></section>
         <section id="method-media"><h2>Evidencias</h2><p>La base maestra inventaría fotos, PDF y planos sin copiarlos al tablero. En las fotos directas, un OCR local lee el código MEC, la fecha, las coordenadas y el nombre impresos; el código relaciona la imagen con RUE y la distancia geográfica verifica la coincidencia. Los conflictos nunca reemplazan un vínculo controlado y quedan para revisión. La galería solicita cada archivo al backend únicamente después de validar la sesión.</p></section>
         <section id="method-update"><h2>Actualización</h2><p>Los registros y fotos de CIALPA Fotos se refrescan durante la sesión. El RUE y sus tiempos se actualizan cuando el equipo autorizado recompila la base maestra, genera una nueva instantánea sanitizada y publica una nueva versión.</p></section>
@@ -681,7 +713,7 @@ function renderDrawer() {
       <button role="tab" data-drawer-tab="times" class="${state.drawerTab === 'times' ? 'is-active' : ''}" aria-selected="${state.drawerTab === 'times'}">Tiempos</button>
       <button role="tab" data-drawer-tab="evidence" class="${state.drawerTab === 'evidence' ? 'is-active' : ''}" aria-selected="${state.drawerTab === 'evidence'}">Evidencias</button>
     </div>
-    <div class="school-identity"><span>${statusPill(school)}</span><h3>${escapeHtml(school.name)}</h3><p>MEC ${school.code} · ${escapeHtml(school.department)} / ${escapeHtml(school.district)} / ${escapeHtml(school.locality || 'Sin localidad')}</p></div>
+    <div class="school-identity"><span>${statusPill(school)}</span><h3>${escapeHtml(school.name)}</h3><p>MEC ${escapeHtml(schoolCodeLabel(school))} · ${escapeHtml(school.department)} / ${escapeHtml(school.district)} / ${escapeHtml(school.locality || 'Sin localidad')}</p></div>
     ${state.drawerTab === 'summary' ? renderDrawerSummary(school) : state.drawerTab === 'times' ? renderDrawerTimes(school) : renderDrawerEvidence(school)}`;
   elements.drawerContent.querySelectorAll('[data-drawer-tab]').forEach((button) => button.addEventListener('click', () => {
     state.drawerTab = button.dataset.drawerTab;
@@ -702,11 +734,18 @@ function renderDrawer() {
 }
 
 function renderDrawerSummary(school) {
-  const records = state.remoteIndex.recordsBySchool.get(school.code) || [];
-  const photos = state.remoteIndex.photosBySchool.get(school.code) || [];
+  const records = remoteItemsForSchool(state.remoteIndex.recordsBySchool, school);
+  const photos = remoteItemsForSchool(state.remoteIndex.photosBySchool, school);
+  const rueNotice = school.rueAvailable === false
+    ? `<div class="notice notice-warning">${icon('database-zap')}<span>Esta sede pertenece a la muestra, pero todavía no tiene una ficha RUE descargada. Los conteos de infraestructura y tiempos se completarán en la próxima actualización.</span></div>`
+    : school.rueCoverageKey === 'partial'
+      ? `<div class="notice notice-warning">${icon('database-zap')}<span>La sede comparte ubicación entre varios códigos MEC y la cobertura RUE es parcial: ${formatNumber(school.rueCodeCount)} de ${formatNumber(school.expectedRueCodeCount)} fichas descargadas.</span></div>`
+      : '';
   return `
+    ${rueNotice}
     <div class="detail-metrics">
       <div class="detail-metric"><span>Tiempo observado</span><strong>${escapeHtml(formatMinutes(school.observedMinutes))}</strong></div>
+      <div class="detail-metric"><span>Fichas RUE</span><strong>${formatNumber(school.rueCodeCount || 0)} / ${formatNumber(school.expectedRueCodeCount || schoolCodes(school).length)}</strong></div>
       <div class="detail-metric"><span>Subregistros RUE</span><strong>${formatNumber(school.counts.subrecords)}</strong></div>
       <div class="detail-metric"><span>Respuestas únicas</span><strong>${formatNumber(school.counts.uniqueAnswers)}</strong></div>
       <div class="detail-metric"><span>Registros visibles</span><strong>${records.length}</strong></div>
@@ -875,8 +914,8 @@ function renderEvidenceHierarchy(blocks, pdfDocuments) {
 }
 
 function renderDrawerEvidence(school) {
-  const records = state.remoteIndex.recordsBySchool.get(school.code) || [];
-  const allPhotos = state.remoteIndex.photosBySchool.get(school.code) || [];
+  const records = remoteItemsForSchool(state.remoteIndex.recordsBySchool, school);
+  const allPhotos = remoteItemsForSchool(state.remoteIndex.photosBySchool, school);
   const photos = allPhotos.filter((photo) => photoMatchesCategory(photo));
   const pdfDocuments = allPhotos.filter(isPdfDocument);
   const hierarchy = buildEvidenceHierarchy(records, photos, pdfDocuments);
@@ -925,7 +964,7 @@ function renderPhotoCard(photo) {
 }
 
 async function ensureSchoolPdfEvidence(school) {
-  const documents = (state.remoteIndex.photosBySchool.get(school.code) || []).filter(isPdfDocument);
+  const documents = remoteItemsForSchool(state.remoteIndex.photosBySchool, school).filter(isPdfDocument);
   const pending = documents.filter((photo) => (
     !state.pdfEvidenceIndexes.has(photo.fotoId)
     && !state.pdfEvidenceErrors.has(photo.fotoId)
@@ -1253,9 +1292,10 @@ function closeDrawer() {
 }
 
 function resetFilters() {
-  state.filters = { search: '', department: '', district: '', status: '', media: '' };
+  state.filters = { search: '', department: '', district: '', status: '', rue: '', media: '' };
   elements.filterSearch.value = '';
   elements.filterDepartment.value = '';
+  elements.filterRue.value = '';
   elements.filterMedia.value = '';
   updateDistrictOptions();
   elements.filterStatus.querySelectorAll('button').forEach((button) => {
@@ -1294,6 +1334,7 @@ function bindGlobalEvents() {
     renderView();
   });
   elements.filterDistrict.addEventListener('change', (event) => { state.filters.district = event.target.value; renderView(); });
+  elements.filterRue.addEventListener('change', (event) => { state.filters.rue = event.target.value; renderView(); });
   elements.filterMedia.addEventListener('change', (event) => { state.filters.media = event.target.value; renderView(); });
   elements.filterStatus.addEventListener('click', (event) => {
     const button = event.target.closest('[data-status]');

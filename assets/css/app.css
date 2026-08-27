@@ -230,7 +230,7 @@ img { max-width: 100%; }
   z-index: 450;
   min-height: var(--filterbar-height);
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(125px, .55fr) minmax(125px, .6fr) auto minmax(110px, .5fr) 38px auto;
+  grid-template-columns: minmax(190px, 1.25fr) minmax(112px, .48fr) minmax(112px, .52fr) auto minmax(130px, .55fr) minmax(95px, .42fr) 38px auto;
   align-items: end;
   gap: 9px;
   padding: 10px 18px 11px;
@@ -338,11 +338,14 @@ img { max-width: 100%; }
 .legend-dot.closed { background: var(--teal-700); }
 .legend-dot.saved { background: #d99100; }
 .legend-dot.pending { background: var(--red-700); }
+.legend-dot.no-rue { border-color: var(--blue-700); background: #fff; }
 #school-map { width: 100%; height: 100%; min-height: 520px; border: 1px solid var(--line-300); border-radius: 6px; background: #e9eef2; }
 .school-marker { display: grid; place-items: center; width: 22px; height: 22px; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 2px 7px rgba(0,0,0,.35); }
 .school-marker.closed { background: var(--teal-700); }
 .school-marker.saved { background: #d99100; }
 .school-marker.pending { background: var(--red-700); }
+.school-marker.no-rue { border-color: var(--blue-700); background: #fff; }
+.school-marker.partial-rue { box-shadow: 0 0 0 3px rgba(42, 111, 151, .35), 0 2px 7px rgba(0,0,0,.35); }
 .school-marker.selected { width: 29px; height: 29px; border-color: #fff; box-shadow: 0 0 0 4px rgba(229,72,43,.35), 0 3px 10px rgba(0,0,0,.45); background: var(--coral-600); }
 .leaflet-popup-content { min-width: 210px; margin: 12px 14px; }
 .map-popup strong { display: block; margin-bottom: 4px; font-size: .8rem; }
@@ -516,7 +519,11 @@ img { max-width: 100%; }
 
 @media (max-width: 1280px) {
   .kpi-grid { grid-template-columns: repeat(3, minmax(135px, 1fr)); }
-  .filterbar { grid-template-columns: minmax(210px, 1fr) 130px 140px minmax(330px, auto) 110px 38px; }
+  .filterbar { grid-template-columns: minmax(200px, 1fr) 120px 130px 130px 38px; }
+  .filterbar .segmented { grid-column: 1 / span 3; min-width: 0; }
+  .filterbar label:has(#filter-rue) { grid-column: 4; grid-row: 1; }
+  .filterbar label:has(#filter-media) { grid-column: 4; grid-row: 2; }
+  .filterbar .reset-filters { grid-column: 5; grid-row: 1; }
   .filterbar output { display: none; }
 }
 
@@ -524,8 +531,9 @@ img { max-width: 100%; }
   :root { --sidebar-width: 190px; }
   .filterbar { position: relative; top: auto; grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(130px, .5fr)) 38px; }
   .filterbar .segmented { grid-column: 1 / span 3; min-width: 0; }
-  .filterbar label:has(#filter-media) { grid-column: 4; grid-row: 1; }
-  .filterbar .reset-filters { grid-column: 4; grid-row: 2; }
+  .filterbar label:has(#filter-rue) { grid-column: 4; grid-row: 1; }
+  .filterbar label:has(#filter-media) { grid-column: 4; grid-row: 2; }
+  .filterbar .reset-filters { grid-column: 4; grid-row: 3; }
   .dashboard-grid, .dashboard-grid.equal { grid-template-columns: 1fr; }
   .map-layout { grid-template-rows: auto 590px; }
   .method-grid { grid-template-columns: 1fr; }
@@ -546,7 +554,8 @@ img { max-width: 100%; }
   .filterbar .search-control { grid-column: 1 / span 2; }
   .filterbar label:has(#filter-department) { grid-column: 1; grid-row: auto; }
   .filterbar label:has(#filter-district) { grid-column: 2; grid-row: auto; }
-  .filterbar label:has(#filter-media) { grid-column: 1 / -1; grid-row: auto; }
+  .filterbar label:has(#filter-rue) { grid-column: 1; grid-row: auto; }
+  .filterbar label:has(#filter-media) { grid-column: 2; grid-row: auto; }
   .filterbar .segmented { grid-column: 1 / -1; grid-row: auto; }
   .filterbar .reset-filters { grid-column: 3; grid-row: 1; }
   #view-root { padding: 14px 10px 24px; }

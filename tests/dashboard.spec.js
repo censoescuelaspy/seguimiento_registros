@@ -5,7 +5,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
-  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.5.0');
+  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.6.0');
 }
 
 async function navigate(page, name) {
@@ -16,15 +16,19 @@ async function navigate(page, name) {
 
 test('login, resumen y filtros globales', async ({ page }, testInfo) => {
   await login(page);
-  await expect(page.locator('#filter-count')).toHaveText('49 escuelas');
+  await expect(page.locator('#filter-count')).toHaveText('85 sedes');
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Códigos MEC' }).locator('strong')).toHaveText('86');
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Fichas RUE' }).locator('strong')).toHaveText('49/86');
   const pending = page.getByRole('button', { name: 'Pendientes', exact: true });
   await pending.click();
   await expect(pending).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#filter-count')).toHaveText('26 escuelas');
+  await expect(page.locator('#filter-count')).toHaveText('62 sedes');
   await page.locator('#filter-search').fill('Cleto Romero');
-  await expect(page.locator('#filter-count')).toHaveText('0 escuelas');
+  await expect(page.locator('#filter-count')).toHaveText('0 sedes');
   await page.getByRole('button', { name: 'Restablecer filtros' }).click();
-  await expect(page.locator('#filter-count')).toHaveText('49 escuelas');
+  await expect(page.locator('#filter-count')).toHaveText('85 sedes');
+  await page.locator('#filter-rue').selectOption('none');
+  await expect(page.locator('#filter-count')).toHaveText('37 sedes');
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-overview.png`, fullPage: false });
 });
 
@@ -32,7 +36,8 @@ test('mapa, navegación rápida y detalle de escuela', async ({ page }, testInfo
   await login(page);
   await navigate(page, 'Mapa');
   await expect(page.locator('#school-map')).toBeVisible();
-  await expect(page.locator('.leaflet-marker-icon')).toHaveCount(49);
+  await expect(page.locator('.leaflet-marker-icon')).toHaveCount(85);
+  await expect(page.locator('.school-marker.no-rue')).toHaveCount(37);
   await expect.poll(() => page.locator('#school-map img.leaflet-tile-loaded').count(), { timeout: 12_000 }).toBeGreaterThan(0);
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-map.png`, fullPage: false });
   await page.getByRole('button', { name: 'Escuela siguiente' }).click();
@@ -46,12 +51,12 @@ test('escenarios de tiempo responden a equipos y filtros', async ({ page }) => {
   await login(page);
   await navigate(page, 'Tiempos');
   await expect(page.getByRole('heading', { name: 'Tiempos y esfuerzo restante' })).toBeVisible();
-  await expect(page.locator('.stepper output')).toHaveText('5');
+  await expect(page.locator('.stepper output')).toHaveText('8');
   await page.getByRole('button', { name: 'Agregar equipo' }).click();
-  await expect(page.locator('.stepper output')).toHaveText('6');
+  await expect(page.locator('.stepper output')).toHaveText('9');
   await expect(page.locator('.scenario-card')).toHaveCount(3);
-  await page.locator('#filter-department').selectOption('Capital');
-  await expect(page.locator('#filter-count')).not.toHaveText('49 escuelas');
+  await page.locator('#filter-department').selectOption('CAPITAL');
+  await expect(page.locator('#filter-count')).toHaveText('15 sedes');
 });
 
 test('evidencias protegidas por escuela y especialidad', async ({ page }, testInfo) => {
@@ -80,9 +85,9 @@ test('evidencias protegidas por escuela y especialidad', async ({ page }, testIn
 test('escuela solo en archivo y reporte PDF histórico', async ({ page }, testInfo) => {
   await login(page);
   await navigate(page, 'Evidencias');
-  await expect(page.locator('#filter-count')).toHaveText('50 escuelas');
+  await expect(page.locator('#filter-count')).toHaveText('85 sedes');
   await page.locator('#filter-search').fill('3620 San Pedro');
-  await expect(page.locator('#filter-count')).toHaveText('1 escuela');
+  await expect(page.locator('#filter-count')).toHaveText('1 sede');
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 3620 SAN PEDRO/i }).click();
   await expect(page.locator('#drawer-content .school-identity .status-archive')).toContainText('Sin ficha RUE extraída');
   await expect(page.getByRole('heading', { name: 'Bloques, aulas y espacios' })).toBeVisible();

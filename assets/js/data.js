@@ -8,12 +8,13 @@ export function filterSchools(schools, filters) {
   const query = searchable(filters.search);
   return schools.filter((school) => {
     const haystack = searchable([
-      school.code, school.name, school.department, school.district, school.locality
+      ...(school.codes || [school.code]), school.name, school.department, school.district, school.locality
     ].join(' '));
     return (!query || haystack.includes(query))
       && (!filters.department || school.department === filters.department)
       && (!filters.district || school.district === filters.district)
       && (!filters.status || school.statusKey === filters.status)
+      && (!filters.rue || school.rueCoverageKey === filters.rue)
       && (!filters.media || (filters.media === 'with' ? school.media.files > 0 : school.media.files === 0));
   });
 }
@@ -24,6 +25,10 @@ export function summarizeSchools(schools) {
     closed: 0,
     saved: 0,
     pending: 0,
+    institutionCodes: 0,
+    rueInstitutionCodes: 0,
+    withRue: 0,
+    withoutRue: 0,
     observedHours: 0,
     withMedia: 0,
     subrecords: 0,
@@ -31,6 +36,10 @@ export function summarizeSchools(schools) {
   };
   schools.forEach((school) => {
     summary[school.statusKey] += 1;
+    summary.institutionCodes += (school.codes || [school.code]).length;
+    summary.rueInstitutionCodes += Number(school.rueCodeCount || 0);
+    summary.withRue += school.rueAvailable ? 1 : 0;
+    summary.withoutRue += school.rueAvailable ? 0 : 1;
     summary.observedHours += Number(school.observedMinutes || 0) / 60;
     summary.withMedia += school.media.files > 0 ? 1 : 0;
     summary.subrecords += Number(school.counts.subrecords || 0);

@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "data" / "dashboard.json"
 DEFAULT_AUDIT = Path(__file__).resolve().parents[1] / "reports" / "privacy_audit.json"
 FORBIDDEN_KEYS = {
@@ -178,6 +178,18 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             connection,
             """
             SELECT
+              c.codigo_mec AS codigo_catalogo,
+              c.codigo_app,
+              c.sitio_id,
+              c.nombre_establecimiento_catalogo,
+              c.departamento_catalogo,
+              c.distrito_catalogo,
+              c.localidad_catalogo,
+              c.zona_catalogo,
+              c.latitud_catalogo,
+              c.longitud_catalogo,
+              c.orden_muestra,
+              c.sede_compartida,
               i.codigo_mec,
               i.nombre_establecimiento,
               i.departamento,
@@ -216,9 +228,10 @@ def build_snapshot(database: Path) -> dict[str, Any]:
               COALESCE(v.fotos_relacion_revision, 0) AS fotos_relacion_revision,
               COALESCE(v.fotos_relacion_conflicto, 0) AS fotos_relacion_conflicto,
               COALESCE(v.estados_vinculo, '') AS estados_vinculo
-            FROM rue_instituciones i
-            LEFT JOIN v_escuelas_resumen v USING (codigo_mec)
-            ORDER BY i.codigo_mec
+            FROM catalogo_escuelas_piloto c
+            LEFT JOIN rue_instituciones i ON i.codigo_mec = c.codigo_mec
+            LEFT JOIN v_escuelas_resumen v ON v.codigo_mec = c.codigo_mec
+            ORDER BY c.sitio_id, c.orden_muestra, c.codigo_mec
             """,
         )
         block_rows = query_dicts(
@@ -246,6 +259,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             [
                 {
                     "codigo_mec": row["codigo_mec"],
+                    "institutionCode": text(row["codigo_mec"]).zfill(7),
                     "block": text(row["block"]),
                     "subrecords": integer(row["subrecords"]),
                     "rooms": integer(row["rooms"]),
@@ -261,6 +275,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             [
                 {
                     "codigo_mec": row["codigo_mec"],
+                    "institutionCode": text(row["codigo_mec"]).zfill(7),
                     "block": text(row["block"]),
                     "floor": text(row["floor"]),
                     "roomNumber": text(row["roomNumber"]),
@@ -274,58 +289,111 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             "block",
         )
 
-        schools = []
+        site_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in school_rows:
-            code = text(row["codigo_mec"]).zfill(7)
+            site_id = text(row["sitio_id"]) or text(row["codigo_catalogo"]).zfill(7)
+            site_rows[site_id].append(row)
+
+        def summed(rows: list[dict[str, Any]], field: str) -> int:
+            return sum(integer(row.get(field)) for row in rows)
+
+        def latest(rows: list[dict[str, Any]], field: str) -> str:
+            values = sorted(text(row.get(field)) for row in rows if text(row.get(field)))
+            return values[-1] if values else ""
+
+        def earliest(rows: list[dict[str, Any]], field: str) -> str:
+            values = sorted(text(row.get(field)) for row in rows if text(row.get(field)))
+            return values[0] if values else ""
+
+        schools = []
+        for site_id, rows in site_rows.items():
+            rows.sort(key=lambda row: (integer(row.get("orden_muestra")) or 10**9, text(row.get("codigo_catalogo"))))
+            primary = rows[0]
+            codes = [text(row["codigo_catalogo"]).zfill(7) for row in rows]
+            available = [row for row in rows if text(row.get("codigo_mec"))]
+            available_codes = [text(row["codigo_mec"]).zfill(7) for row in available]
+            coverage = "none" if not available else "complete" if len(available) == len(rows) else "partial"
+            source_statuses = [status_key(row.get("estado")) for row in available]
+            if coverage == "none":
+                site_status_key = "pending"
+                site_status = "Sin ficha RUE extraída"
+            elif coverage == "complete" and source_statuses and all(item == "closed" for item in source_statuses):
+                site_status_key = "closed"
+                site_status = "Cerrado en campo"
+            elif any(item in {"closed", "saved"} for item in source_statuses):
+                site_status_key = "saved"
+                site_status = "Carga parcial o guardada"
+            else:
+                site_status_key = "pending"
+                site_status = "Pendiente"
+
+            observed_values = [
+                float(row["tiempo_en_sesiones_minutos"])
+                for row in available
+                if row.get("tiempo_en_sesiones_minutos") is not None
+            ]
+            link_statuses = sorted({text(row.get("estados_vinculo")) for row in rows if text(row.get("estados_vinculo"))})
+            site_blocks = [item for code in codes for item in blocks.get(code, [])]
+            site_rooms = [item for code in codes for item in rooms.get(code, [])]
             schools.append(
                 {
-                    "code": code,
-                    "name": text(row["nombre_establecimiento"]),
-                    "department": text(row["departamento"]),
-                    "district": text(row["distrito"]),
-                    "locality": text(row["localidad_barrio"]),
-                    "status": text(row["estado"]),
-                    "statusKey": status_key(row["estado"]),
-                    "startedDate": text(row["fecha_iniciado_rue"]),
-                    "updatedDate": text(row["fecha_actualizado_rue"]),
-                    "firstActivityAt": text(row["actividad_primera"]),
-                    "lastActivityAt": text(row["actividad_ultima"]),
-                    "latitude": number(row["latitud_decimal"], 7),
-                    "longitude": number(row["longitud_decimal"], 7),
+                    "code": codes[0],
+                    "codes": codes,
+                    "siteId": site_id,
+                    "sharedSite": len(codes) > 1 or bool(primary.get("sede_compartida")),
+                    "sampleOrder": min(integer(row.get("orden_muestra")) or 10**9 for row in rows),
+                    "name": " / ".join(dict.fromkeys(text(row["nombre_establecimiento_catalogo"]) for row in rows)),
+                    "department": text(primary["departamento_catalogo"]),
+                    "district": text(primary["distrito_catalogo"]),
+                    "locality": text(primary["localidad_catalogo"]),
+                    "status": site_status,
+                    "statusKey": site_status_key,
+                    "rueCoverageKey": coverage,
+                    "rueAvailable": bool(available),
+                    "rueCodeCount": len(available_codes),
+                    "expectedRueCodeCount": len(codes),
+                    "startedDate": earliest(available, "fecha_iniciado_rue"),
+                    "updatedDate": latest(available, "fecha_actualizado_rue"),
+                    "firstActivityAt": earliest(available, "actividad_primera"),
+                    "lastActivityAt": latest(available, "actividad_ultima"),
+                    "latitude": number(primary.get("latitud_catalogo") if primary.get("latitud_catalogo") is not None else primary.get("latitud_decimal"), 7),
+                    "longitude": number(primary.get("longitud_catalogo") if primary.get("longitud_catalogo") is not None else primary.get("longitud_decimal"), 7),
                     "counts": {
-                        "blocksAndFloors": integer(row["bloques_plantas"]),
-                        "recreationAreas": integer(row["areas_recreacion"]),
-                        "classrooms": integer(row["aulas"]),
-                        "dependencies": integer(row["dependencias"]),
-                        "laboratories": integer(row["laboratorios"]),
-                        "workshops": integer(row["talleres"]),
-                        "sanitarySpaces": integer(row["sanitarios"]),
-                        "subrecords": integer(row["subregistros_total"]),
-                        "uniqueAnswers": integer(row["respuestas_unicas"]),
-                        "events": integer(row["eventos_historial"]),
+                        "blocksAndFloors": summed(available, "bloques_plantas"),
+                        "recreationAreas": summed(available, "areas_recreacion"),
+                        "classrooms": summed(available, "aulas"),
+                        "dependencies": summed(available, "dependencias"),
+                        "laboratories": summed(available, "laboratorios"),
+                        "workshops": summed(available, "talleres"),
+                        "sanitarySpaces": summed(available, "sanitarios"),
+                        "subrecords": summed(available, "subregistros_total"),
+                        "uniqueAnswers": summed(available, "respuestas_unicas"),
+                        "events": summed(available, "eventos_historial"),
                     },
-                    "observedMinutes": number(row["tiempo_en_sesiones_minutos"]),
-                    "observedSessions": integer(row["sesiones_observadas"]),
+                    "observedMinutes": number(sum(observed_values)) if observed_values else None,
+                    "observedSessions": summed(available, "sesiones_observadas"),
                     "media": {
-                        "folders": integer(row["carpetas_medios"]),
-                        "files": integer(row["archivos_medios"]),
-                        "directPhotos": integer(row["fotos_directas"]),
-                        "pdfReports": integer(row["reportes_pdf"]),
-                        "cadPlans": integer(row["planos_dwg"]),
-                        "pdfPages": integer(row["paginas_pdf"]),
-                        "pdfImageReferences": integer(row["referencias_imagen_pdf"]),
-                        "ocrScanned": integer(row["fotos_ocr"]),
-                        "ocrCodeDetected": integer(row["fotos_con_codigo_ocr"]),
-                        "ocrGpsDetected": integer(row["fotos_con_gps_visible"]),
-                        "photoLinksConfirmed": integer(row["fotos_relacion_confirmada"]),
-                        "photoLinksReview": integer(row["fotos_relacion_revision"]),
-                        "photoLinksConflict": integer(row["fotos_relacion_conflicto"]),
-                        "linkStatus": text(row["estados_vinculo"]),
+                        "folders": summed(rows, "carpetas_medios"),
+                        "files": summed(rows, "archivos_medios"),
+                        "directPhotos": summed(rows, "fotos_directas"),
+                        "pdfReports": summed(rows, "reportes_pdf"),
+                        "cadPlans": summed(rows, "planos_dwg"),
+                        "pdfPages": summed(rows, "paginas_pdf"),
+                        "pdfImageReferences": summed(rows, "referencias_imagen_pdf"),
+                        "ocrScanned": summed(rows, "fotos_ocr"),
+                        "ocrCodeDetected": summed(rows, "fotos_con_codigo_ocr"),
+                        "ocrGpsDetected": summed(rows, "fotos_con_gps_visible"),
+                        "photoLinksConfirmed": summed(rows, "fotos_relacion_confirmada"),
+                        "photoLinksReview": summed(rows, "fotos_relacion_revision"),
+                        "photoLinksConflict": summed(rows, "fotos_relacion_conflicto"),
+                        "linkStatus": " / ".join(link_statuses),
                     },
-                    "blocks": blocks.get(code, []),
-                    "rooms": rooms.get(code, []),
+                    "blocks": site_blocks,
+                    "rooms": site_rooms,
                 }
             )
+
+        schools.sort(key=lambda school: (school["sampleOrder"], school["code"]))
 
         status_counts = Counter(item["statusKey"] for item in schools)
         closed_times = [item["observedMinutes"] for item in schools if item["statusKey"] == "closed"]
@@ -371,9 +439,15 @@ def build_snapshot(database: Path) -> dict[str, Any]:
                 item["statusKey"] == "pending" and item["counts"]["events"] == 0 for item in schools
             ),
             "withMedia": sum(item["media"]["files"] > 0 for item in schools),
-            "pilotSchools": scalar(connection, "SELECT COUNT(*) FROM catalogo_escuelas_piloto"),
-            "pilotSchoolsWithMedia": scalar(connection, "SELECT COUNT(*) FROM v_catalogo_piloto_medios WHERE archivos_medios > 0"),
-            "rueSchoolsWithMedia": sum(item["media"]["files"] > 0 for item in schools),
+            "physicalSites": len(schools),
+            "institutionCodes": sum(len(item["codes"]) for item in schools),
+            "ruePhysicalSites": sum(item["rueAvailable"] for item in schools),
+            "rueInstitutionCodes": sum(item["rueCodeCount"] for item in schools),
+            "withoutRueRecord": sum(not item["rueAvailable"] for item in schools),
+            "pilotSchools": sum(len(item["codes"]) for item in schools),
+            "pilotPhysicalSites": len(schools),
+            "pilotSchoolsWithMedia": sum(item["media"]["files"] > 0 for item in schools),
+            "rueSchoolsWithMedia": sum(item["rueAvailable"] and item["media"]["files"] > 0 for item in schools),
             "observedHours": number(sum(float(item["observedMinutes"] or 0) for item in schools) / 60),
             "closedObservedHours": number(sum(float(item or 0) for item in closed_times) / 60),
             "savedObservedHours": number(sum(float(item or 0) for item in saved_times) / 60),
@@ -396,19 +470,19 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             "linksUnlinked": integer(link_counts.get("sin_vinculo")),
             "schoolTime": closed_distribution,
             "blockTime": distribution(
-                row["observedMinutes"] for row in block_rows if status_key(next(
-                    (item["status"] for item in schools if item["code"] == text(row["codigo_mec"]).zfill(7)), ""
-                )) == "closed"
+                block["observedMinutes"]
+                for school in schools if school["statusKey"] == "closed"
+                for block in school["blocks"]
             ),
             "roomTime": distribution(
-                row["observedMinutes"] for row in room_rows if status_key(next(
-                    (item["status"] for item in schools if item["code"] == text(row["codigo_mec"]).zfill(7)), ""
-                )) == "closed"
+                room["observedMinutes"]
+                for school in schools if school["statusKey"] == "closed"
+                for room in school["rooms"]
             ),
         }
         metrics["scenarios"] = scenario_metrics(schools, closed_distribution)
         return {
-            "schemaVersion": "2026-08-22.3",
+            "schemaVersion": "2026-08-26.1",
             "appVersion": VERSION,
             "generatedAt": now.isoformat(),
             "cutoff": database_updated_at[:10] if database_updated_at else now.date().isoformat(),
@@ -486,7 +560,7 @@ def main() -> int:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     print(
-        f"Snapshot generado: {len(snapshot['schools'])} escuelas, corte {snapshot['cutoff']}, "
+        f"Snapshot generado: {len(snapshot['schools'])} sedes, corte {snapshot['cutoff']}, "
         f"privacidad PASS."
     )
     return 0

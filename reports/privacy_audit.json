@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-23T17:36:03-03:00",
-  "schemaVersion": "2026-08-22.3",
+  "generatedAt": "2026-08-26T21:32:10-03:00",
+  "schemaVersion": "2026-08-26.1",
   "status": "PASS",
-  "schools": 49,
+  "schools": 85,
   "forbiddenFindings": [],
   "checks": [
     "no_forbidden_keys",

@@ -44,8 +44,18 @@ class DashboardExportTest(unittest.TestCase):
             INSERT INTO actualizaciones VALUES ('2026-08-22T12:00:00-03:00');
             CREATE TABLE media_vinculos_escuela(estado_vinculo VARCHAR);
             INSERT INTO media_vinculos_escuela VALUES ('confirmado');
-            CREATE TABLE catalogo_escuelas_piloto(codigo_mec VARCHAR);
-            INSERT INTO catalogo_escuelas_piloto VALUES ('0000001'), ('0000002');
+            CREATE TABLE catalogo_escuelas_piloto(
+              codigo_mec VARCHAR, codigo_app VARCHAR, sitio_id VARCHAR,
+              nombre_establecimiento_catalogo VARCHAR, departamento_catalogo VARCHAR,
+              distrito_catalogo VARCHAR, localidad_catalogo VARCHAR, zona_catalogo VARCHAR,
+              latitud_catalogo DOUBLE, longitud_catalogo DOUBLE, orden_muestra INTEGER,
+              sede_compartida BOOLEAN
+            );
+            INSERT INTO catalogo_escuelas_piloto VALUES
+              ('0000001','1','S001','Escuela Uno','Capital','Asunción','Centro','Urbana',-25.3,-57.6,1,FALSE),
+              ('0000002','2','S002','Escuela Dos','Central','Capiatá','Centro','Urbana',-25.4,-57.5,2,TRUE),
+              ('0000003','3','S002','Escuela Tres','Central','Capiatá','Centro','Urbana',-25.4,-57.5,3,TRUE),
+              ('0000004','4','S003','Escuela Cuatro','Central','San Lorenzo','Centro','Urbana',-25.35,-57.51,4,FALSE);
             CREATE VIEW v_catalogo_piloto_medios AS
               SELECT * FROM (VALUES ('0000001', 1), ('0000002', 0)) AS t(codigo_mec, archivos_medios);
             CREATE TABLE rue_tiempos_bloque(codigo_mec VARCHAR,bloque VARCHAR,subregistros_incluidos INTEGER,aulas_incluidas INTEGER,tiempo_en_sesiones_minutos DOUBLE,sesiones_observadas INTEGER,eventos_historial INTEGER);
@@ -53,7 +63,9 @@ class DashboardExportTest(unittest.TestCase):
             CREATE TABLE rue_tiempos_aula(codigo_mec VARCHAR,bloque VARCHAR,planta VARCHAR,numero_aula VARCHAR,etiqueta_aula VARCHAR,tiempo_en_sesiones_minutos DOUBLE,sesiones_observadas INTEGER,eventos_historial INTEGER);
             INSERT INTO rue_tiempos_aula VALUES ('0000001','1','PB','1','Aula 1',10,1,2);
             CREATE VIEW v_escuelas_resumen AS
-              SELECT codigo_mec, 0 AS carpetas_medios, 0 AS archivos_medios, 0 AS fotos_directas,
+              SELECT codigo_mec, 0 AS carpetas_medios,
+                     CASE WHEN codigo_mec = '0000001' THEN 1 ELSE 0 END AS archivos_medios,
+                     CASE WHEN codigo_mec = '0000001' THEN 1 ELSE 0 END AS fotos_directas,
                      0 AS reportes_pdf, 0 AS planos_dwg, 0 AS paginas_pdf,
                      0 AS referencias_imagen_pdf,
                      CASE WHEN codigo_mec = '0000001' THEN 1 ELSE 0 END AS fotos_ocr,
@@ -76,13 +88,22 @@ class DashboardExportTest(unittest.TestCase):
             snapshot = EXPORT.build_snapshot(database)
             EXPORT.write_outputs(snapshot, output, audit)
             written = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(written["metrics"]["schools"], 2)
+            self.assertEqual(written["metrics"]["schools"], 3)
+            self.assertEqual(written["metrics"]["physicalSites"], 3)
+            self.assertEqual(written["metrics"]["institutionCodes"], 4)
+            self.assertEqual(written["metrics"]["ruePhysicalSites"], 2)
+            self.assertEqual(written["metrics"]["rueInstitutionCodes"], 2)
+            self.assertEqual(written["metrics"]["withoutRueRecord"], 1)
             self.assertEqual(written["metrics"]["closed"], 1)
+            self.assertEqual(written["metrics"]["pending"], 2)
             self.assertEqual(written["metrics"]["pilotSchoolsWithMedia"], 1)
             self.assertEqual(written["metrics"]["viewableHistoricalFiles"], 1)
             self.assertEqual(written["metrics"]["photoLinksConfirmed"], 1)
             self.assertEqual(written["schools"][0]["media"]["ocrCodeDetected"], 1)
             self.assertEqual(written["schools"][0]["blocks"][0]["observedMinutes"], 120)
+            self.assertEqual(written["schools"][1]["codes"], ["0000002", "0000003"])
+            self.assertEqual(written["schools"][1]["rueCoverageKey"], "partial")
+            self.assertFalse(written["schools"][2]["rueAvailable"])
             self.assertEqual(json.loads(audit.read_text(encoding="utf-8"))["status"], "PASS")
             self.assertEqual(EXPORT.privacy_findings(written), [])
 

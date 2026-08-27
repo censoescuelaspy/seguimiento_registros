@@ -2,10 +2,12 @@
 
 Tablero web instalable para consultar el avance de infraestructura escolar, explorar escuelas en el mapa, revisar tiempos observados y estimar el esfuerzo restante. Los registros fotográficos se consultan mediante el backend autenticado de **CIALPA Fotos** y nunca se copian al repositorio público.
 
-## Estado inicial
+## Estado del corte
 
 - Fuente analítica: `CIALPA_RUE_FOTOS.duckdb`.
-- Corte inicial: 2026-08-22.
+- Corte publicado: 2026-08-23; generado nuevamente el 2026-08-26.
+- Muestra: 85 sedes físicas y 86 códigos MEC; una sede agrupa dos códigos.
+- Cobertura RUE disponible: 49 códigos correspondientes a 48 sedes; 37 sedes todavía no poseen ficha descargada.
 - Frontend: HTML, CSS y JavaScript modular sin compilación.
 - Mapas: Leaflet con OpenStreetMap y Esri World Imagery.
 - Figuras: Chart.js.
@@ -19,7 +21,7 @@ El repositorio contiene una instantánea **sanitizada**: código MEC, nombre y u
 
 El login del frontend no protege archivos estáticos por sí solo. La protección real de fotos y registros corresponde al backend: cada solicitud lleva un token de sesión y Apps Script valida el alcance del usuario. Un administrador ve todo; un supervisor o encuestador ve únicamente lo permitido por su equipo.
 
-La vista **Evidencias** combina las cargas nativas de CIALPA Fotos con el archivo histórico conciliado por código RUE. Incluye imágenes y PDF y conserva visibles las escuelas con evidencia aunque todavía no tengan una ficha en la extracción RUE disponible. El detalle presenta el árbol **bloque > piso > aula o espacio > fotos**, construido con los registros y con rótulos como `B1A1 Foto 3` leídos dentro de cada PDF. Las tarjetas visibles reciben miniaturas JPEG privadas en lotes de hasta 12; al pulsar una se descarga solo su recorte ampliado. El PDF completo se solicita únicamente mediante **Ver láminas**. Ningún archivo forma parte de la instantánea pública.
+La vista **Evidencias** combina las cargas nativas de CIALPA Fotos con el archivo histórico conciliado por código RUE. Incluye imágenes y PDF y conserva visibles todas las sedes de la muestra, aunque todavía no tengan una ficha en la extracción RUE disponible. El detalle presenta el árbol **bloque > piso > aula o espacio > fotos**, construido con los registros y con rótulos como `B1A1 Foto 3` leídos dentro de cada PDF. Las tarjetas visibles reciben miniaturas JPEG privadas en lotes de hasta 12; al pulsar una se descarga solo su recorte ampliado. El PDF completo se solicita únicamente mediante **Ver láminas**. Ningún archivo forma parte de la instantánea pública.
 
 Desde la versión `1.2.0`, el tablero informa la conciliación foto por foto realizada en la base privada: cantidad procesada, códigos MEC visibles, ubicaciones visibles, relaciones confirmadas y casos por revisar. La instantánea pública recibe únicamente esos conteos; no contiene texto OCR, fecha y hora de captura, coordenadas impresas ni rutas de archivos.
 
@@ -39,8 +41,8 @@ Abrir `http://127.0.0.1:4174/?demo=1` para la simulación local. El modo demo es
 ## Actualizar datos
 
 ```powershell
-& "<ruta-local>\ACTUALIZAR_BASE_MAESTRA.ps1"
-python tools/export_dashboard.py --database "<ruta-local>\CIALPA_RUE_FOTOS.duckdb"
+& "<directorio-privado>\ACTUALIZAR_BASE_MAESTRA.ps1"
+python tools/export_dashboard.py --database "<directorio-privado>\CIALPA_RUE_FOTOS.duckdb"
 npm run check
 ```
 

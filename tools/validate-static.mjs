@@ -21,10 +21,24 @@ if (!serviceWorker.includes(`v${version.version}`)) throw new Error('La caché d
 const snapshotText = await readFile('assets/data/dashboard.json', 'utf8');
 const snapshot = JSON.parse(snapshotText);
 if (!Array.isArray(snapshot.schools) || snapshot.schools.length !== snapshot.metrics.schools) {
-  throw new Error('El total de escuelas no coincide con la instantánea.');
+  throw new Error('El total de sedes no coincide con la instantánea.');
 }
 const statusTotal = snapshot.metrics.closed + snapshot.metrics.saved + snapshot.metrics.pending;
-if (statusTotal !== snapshot.metrics.schools) throw new Error('Los estados no suman el total de escuelas.');
+if (statusTotal !== snapshot.metrics.schools) throw new Error('Los estados no suman el total de sedes.');
+if (snapshot.metrics.physicalSites !== snapshot.schools.length) {
+  throw new Error('El total de sedes físicas no coincide con las filas publicadas.');
+}
+const siteIds = new Set(snapshot.schools.map((school) => school.siteId));
+if (siteIds.size !== snapshot.schools.length) throw new Error('Existen sedes físicas duplicadas.');
+const institutionCodes = snapshot.schools.reduce((total, school) => total + (school.codes || [school.code]).length, 0);
+if (snapshot.metrics.institutionCodes !== institutionCodes) throw new Error('El total de códigos MEC no coincide.');
+const rueInstitutionCodes = snapshot.schools.reduce((total, school) => total + Number(school.rueCodeCount || 0), 0);
+if (snapshot.metrics.rueInstitutionCodes !== rueInstitutionCodes) throw new Error('La cobertura de códigos RUE no coincide.');
+const ruePhysicalSites = snapshot.schools.filter((school) => school.rueAvailable).length;
+if (snapshot.metrics.ruePhysicalSites !== ruePhysicalSites) throw new Error('La cobertura de sedes RUE no coincide.');
+if (snapshot.metrics.withoutRueRecord !== snapshot.schools.length - ruePhysicalSites) {
+  throw new Error('El total de sedes sin ficha RUE no coincide.');
+}
 if (snapshot.metrics.withCoordinates !== snapshot.schools.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)).length) {
   throw new Error('El control de coordenadas no coincide.');
 }
@@ -47,4 +61,4 @@ for (const file of required.filter((item) => item.endsWith('.js'))) {
   execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
 }
 
-console.log(`Validación estática PASS: ${snapshot.schools.length} escuelas, versión ${version.version}.`);
+console.log(`Validación estática PASS: ${snapshot.schools.length} sedes, ${institutionCodes} códigos MEC, versión ${version.version}.`);
