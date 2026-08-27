@@ -2,8 +2,8 @@ const params = new URLSearchParams(location.search);
 
 export const APP_CONFIG = Object.freeze({
   appName: 'CIALPA Seguimiento',
-  version: '1.6.0',
-  buildDate: '2026-08-23',
+  version: '1.7.0',
+  buildDate: '2026-08-27',
   snapshotUrl: './assets/data/dashboard.json',
   gasExecUrl: 'https://script.google.com/macros/s/AKfycbz8RmR-TqSb3FzaLSgMO2NlTTOfRPWuYjSC5ZyXw1Vr5iL-PBYeDIerNvCVj--hNjYk/exec',
   sessionStorageKey: 'cialpa-seguimiento-session-v1',

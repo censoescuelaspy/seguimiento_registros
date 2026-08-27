@@ -1,8 +1,9 @@
 import { APP_CONFIG } from './config.js';
 import { ApiClient, ApiError } from './api.js';
 import {
-  daysForScenario, departmentSummary, districtSummary, estimateScenarios,
-  filterSchools, indexRemoteData, sortSchools, summarizeSchools, timeMetricsForSchools
+  daysForScenario, departmentSummary, districtSummary, estimateCensusScenarios, estimateScenarios,
+  filterSchools, indexRemoteData, minimumTeamsForScenario, productiveMonthsForDays,
+  sortSchools, summarizeSchools, timeMetricsForSchools
 } from './data.js';
 import { destroyCharts, renderOverviewCharts, renderTimeCharts } from './charts.js';
 import {
@@ -31,6 +32,8 @@ const state = {
   drawerTab: 'summary',
   evidenceCategory: 'all',
   teamCount: 8,
+  pilotTargetDays: 10,
+  nationalTargetDays: 220,
   photoUrls: new Map(),
   photoRequests: new Map(),
   previewObserver: null,
@@ -562,21 +565,57 @@ function exportSchoolsCsv(schools) {
 
 function renderTimesView(schools) {
   const metrics = state.snapshot.metrics;
+  const assumptions = state.snapshot.assumptions || {};
+  const productiveHours = Number(assumptions.productiveHoursPerTeamDay || 6);
+  const productiveDaysPerMonth = Number(assumptions.productiveDaysPerMonth || 22);
+  const nationalSchoolTarget = Number(assumptions.nationalSchoolTarget || 5000);
   const visibleTimeMetrics = timeMetricsForSchools(schools);
-  const scenarios = estimateScenarios(schools, metrics.schoolTime, state.snapshot.assumptions.contingencyRate);
+  const scenarios = estimateScenarios(schools, metrics.schoolTime, assumptions.contingencyRate);
+  const nationalScenarios = Array.isArray(metrics.nationalScenarios) && metrics.nationalScenarios.length
+    ? metrics.nationalScenarios
+    : estimateCensusScenarios(nationalSchoolTarget, metrics.schoolTime, assumptions.contingencyRate);
   const central = scenarios.find((item) => item.key === 'central');
+  const nationalCentral = nationalScenarios.find((item) => item.key === 'central');
+  const remainingSites = schools.filter((school) => school.statusKey !== 'closed').length;
+  const pilotDays = daysForScenario(central, state.teamCount, productiveHours);
+  const pilotMinimumTeams = minimumTeamsForScenario(central, state.pilotTargetDays, productiveHours);
+  const nationalDays = daysForScenario(nationalCentral, state.teamCount, productiveHours);
+  const nationalMinimumTeams = minimumTeamsForScenario(nationalCentral, state.nationalTargetDays, productiveHours);
+  const nationalMonths = productiveMonthsForDays(nationalDays, productiveDaysPerMonth);
+  const pilotScope = schools.length === state.snapshot.schools.length ? 'muestra completa' : `${schools.length} sedes filtradas`;
+  const teamLabel = (count) => `${count} ${count === 1 ? 'equipo' : 'equipos'}`;
+  const minimumTeamLabel = (count) => `${teamLabel(count)} ${count === 1 ? 'mínimo' : 'mínimos'}`;
+  const scenarioCards = (items, targetDays, national = false) => items.map((scenario) => {
+    const days = daysForScenario(scenario, state.teamCount, productiveHours);
+    const minimumTeams = minimumTeamsForScenario(scenario, targetDays, productiveHours);
+    const duration = national
+      ? `${formatNumber(days, 1)} días · ${formatNumber(productiveMonthsForDays(days, productiveDaysPerMonth), 1)} meses productivos`
+      : `${formatNumber(days, 1)} días efectivos · redondeo ${Math.ceil(days)} días`;
+    return `<article class="scenario-card ${scenario.key === 'central' ? 'central' : ''}" data-scenario-key="${scenario.key}"><span>Escenario ${scenario.label}</span><strong>${formatHours(scenario.adjustedHours)}</strong><small>${duration}<br>${minimumTeamLabel(minimumTeams)} para ${formatNumber(targetDays)} días</small></article>`;
+  }).join('');
   const priority = [...schools].filter((school) => school.statusKey !== 'closed').sort((a, b) => {
     const remainingA = a.statusKey === 'pending' ? central.targetMinutes : Math.max(central.targetMinutes - Number(a.observedMinutes || 0), 0);
     const remainingB = b.statusKey === 'pending' ? central.targetMinutes : Math.max(central.targetMinutes - Number(b.observedMinutes || 0), 0);
     return remainingB - remainingA;
   });
   elements.viewRoot.innerHTML = `
-    ${viewHeading('Planificación', 'Tiempos y esfuerzo restante', 'Escenarios descriptivos calculados con el Q1, la mediana y el Q3 de las escuelas cerradas.')}
-    <section class="team-calculator"><div><h2>Capacidad de equipos</h2><p>${formatNumber(state.snapshot.assumptions.productiveHoursPerTeamDay)} horas productivas por equipo y día.</p></div><div class="stepper" aria-label="Cantidad de equipos"><button data-team-step="-1" aria-label="Quitar equipo">−</button><output>${state.teamCount}</output><button data-team-step="1" aria-label="Agregar equipo">+</button></div></section>
-    <section class="scenario-grid">${scenarios.map((scenario) => {
-      const days = daysForScenario(scenario, state.teamCount, state.snapshot.assumptions.productiveHoursPerTeamDay);
-      return `<article class="scenario-card ${scenario.key === 'central' ? 'central' : ''}"><span>Escenario ${scenario.label}</span><strong>${formatHours(scenario.adjustedHours)}</strong><small>${formatNumber(days, 1)} días efectivos · redondeo operativo ${Math.ceil(days)} días</small></article>`;
-    }).join('')}</section>
+    ${viewHeading('Planificación', 'Tiempo restante y equipos necesarios', 'Estimaciones recalculadas con los tiempos de las escuelas cerradas y el saldo de las fichas guardadas.')}
+    <section class="planning-controls" aria-label="Supuestos de capacidad y plazo">
+      <article class="planning-control"><div><h2>Equipos disponibles</h2><p>${formatNumber(productiveHours)} horas productivas por equipo y día.</p></div><div class="stepper" aria-label="Cantidad de equipos"><button data-team-step="-1" aria-label="Quitar equipo">−</button><output id="team-count-output">${state.teamCount}</output><button data-team-step="1" aria-label="Agregar equipo">+</button></div></article>
+      <article class="planning-control"><div><h2>Plazo del piloto</h2><p>Meta usada para calcular el equipo mínimo.</p></div><div class="stepper" aria-label="Días objetivo del piloto"><button data-pilot-days-step="-1" aria-label="Reducir plazo del piloto">−</button><output id="pilot-days-output">${state.pilotTargetDays}</output><button data-pilot-days-step="1" aria-label="Aumentar plazo del piloto">+</button></div></article>
+      <article class="planning-control"><div><h2>Plazo nacional</h2><p>Días productivos para cubrir ${formatNumber(nationalSchoolTarget)} escuelas.</p></div><div class="stepper" aria-label="Días objetivo del censo nacional"><button data-national-days-step="-10" aria-label="Reducir plazo nacional">−</button><output id="national-days-output">${state.nationalTargetDays}</output><button data-national-days-step="10" aria-label="Aumentar plazo nacional">+</button></div></article>
+    </section>
+    <section class="forecast-section" data-forecast="pilot">
+      <header class="forecast-header"><div><span class="eyebrow">Muestra piloto</span><h2>Saldo de ${remainingSites} ${remainingSites === 1 ? 'sede no cerrada' : 'sedes no cerradas'}</h2><p>${escapeHtml(pilotScope)} · incluye el saldo positivo de las fichas guardadas.</p></div><span class="scope-badge">${icon('calendar-clock', 15)} Meta ${state.pilotTargetDays} días</span></header>
+      <div class="forecast-central"><div><span>Escenario central</span><strong id="pilot-central-hours">${formatHours(central.adjustedHours)}</strong><small>Horas-equipo restantes, con ${formatPercent(assumptions.contingencyRate * 100, 0)} de contingencia.</small></div><dl><div><dt>Con ${teamLabel(state.teamCount)}</dt><dd>${formatNumber(pilotDays, 1)} días efectivos</dd></div><div><dt>Redondeo operativo</dt><dd>${Math.ceil(pilotDays)} días</dd></div><div><dt>Equipo mínimo</dt><dd id="pilot-minimum-teams">${teamLabel(pilotMinimumTeams)}</dd></div></dl></div>
+      <div class="scenario-grid">${scenarioCards(scenarios, state.pilotTargetDays)}</div>
+    </section>
+    <section class="forecast-section national-forecast" data-forecast="national">
+      <header class="forecast-header"><div><span class="eyebrow">Escala nacional</span><h2>Proyección para ${formatNumber(nationalSchoolTarget)} escuelas</h2><p>Esfuerzo total estimado para el censo completo.</p></div><span class="scope-badge">${icon('calendar-range', 15)} Meta ${state.nationalTargetDays} días</span></header>
+      <div class="forecast-central"><div><span>Escenario central</span><strong id="national-central-hours">${formatHours(nationalCentral.adjustedHours)}</strong><small>Horas-equipo totales, con ${formatPercent(assumptions.contingencyRate * 100, 0)} de contingencia.</small></div><dl><div><dt>Con ${teamLabel(state.teamCount)}</dt><dd>${formatNumber(nationalDays, 1)} días efectivos</dd></div><div><dt>Duración equivalente</dt><dd>${formatNumber(nationalMonths, 1)} meses productivos</dd></div><div><dt>Equipo mínimo</dt><dd id="national-minimum-teams">${teamLabel(nationalMinimumTeams)}</dd></div></dl></div>
+      <div class="scenario-grid">${scenarioCards(nationalScenarios, state.nationalTargetDays, true)}</div>
+    </section>
+    <div class="notice planning-caveat">${icon('triangle-alert')}<span><strong>Estimación preliminar.</strong> Se basa en ${formatNumber(metrics.schoolTime.n)} escuelas cerradas de Capital y Central. Los tiempos son sesiones RUE; todavía no modelan traslados, ruralidad, conectividad ni tamaño del equipo.</span></div>
     <section class="dashboard-grid equal">
       <article class="panel"><header class="panel-header"><div><h2>Distribución de tiempos</h2><p>Q1, mediana y Q3 en minutos; solo unidades cerradas.</p></div></header><div class="chart-wrap"><canvas id="time-distribution-chart" role="img" aria-label="Cuartiles de tiempo por escuela, bloque y aula"></canvas></div></article>
       <article class="panel"><header class="panel-header"><div><h2>Horas restantes</h2><p>Incluye 15% de contingencia.</p></div></header><div class="chart-wrap"><canvas id="scenario-chart" role="img" aria-label="Horas restantes en escenarios bajo, central y alto"></canvas></div></article>
@@ -593,7 +632,15 @@ function renderTimesView(schools) {
     </section>`;
   renderTimeCharts(visibleTimeMetrics, scenarios);
   elements.viewRoot.querySelectorAll('[data-team-step]').forEach((button) => button.addEventListener('click', () => {
-    state.teamCount = Math.min(20, Math.max(1, state.teamCount + Number(button.dataset.teamStep)));
+    state.teamCount = Math.min(100, Math.max(1, state.teamCount + Number(button.dataset.teamStep)));
+    renderView();
+  }));
+  elements.viewRoot.querySelectorAll('[data-pilot-days-step]').forEach((button) => button.addEventListener('click', () => {
+    state.pilotTargetDays = Math.min(90, Math.max(1, state.pilotTargetDays + Number(button.dataset.pilotDaysStep)));
+    renderView();
+  }));
+  elements.viewRoot.querySelectorAll('[data-national-days-step]').forEach((button) => button.addEventListener('click', () => {
+    state.nationalTargetDays = Math.min(500, Math.max(30, state.nationalTargetDays + Number(button.dataset.nationalDaysStep)));
     renderView();
   }));
   elements.viewRoot.querySelectorAll('[data-open-school]').forEach((button) => button.addEventListener('click', () => openSchool(button.dataset.openSchool, 'times')));

@@ -13,6 +13,15 @@
 9. Hacer commit y push al remoto operativo. GitHub Actions publica Pages.
 10. Comprobar `version.json`, la fecha de corte, los KPI de sedes/códigos/cobertura RUE, el mapa y un flujo de login/fotos en la URL pública.
 
+## Proyección operativa
+
+- La base pública mantiene separadas las fichas RUE de la muestra y las extracciones adicionales fuera del catálogo piloto.
+- El saldo del piloto se calcula con el Q1, la mediana y el Q3 de las sedes cerradas. A las pendientes se asigna el tiempo objetivo completo; a las guardadas, solo el saldo positivo respecto de ese objetivo.
+- Las horas se incrementan 15% por contingencia y se dividen por 6 horas productivas por equipo y día.
+- El equipo mínimo es `techo(horas ajustadas / (plazo objetivo × 6))`.
+- La proyección de 5.000 escuelas aplica esos tiempos observados a todo el universo y debe leerse como una primera referencia, no como un cronograma nacional definitivo.
+- Antes de decisiones presupuestarias, recalibrar por departamento, ruralidad, traslados, conectividad y composición real de cada equipo.
+
 ## Frecuencia
 
 La base debe revisarse una vez al día después de la jornada, o cuando se incorporen relevamientos urgentes. No conviene publicar después de cada foto: una actualización por lote reduce ruido y permite validar el corte.

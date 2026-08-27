@@ -1,5 +1,51 @@
 # Bitácora
 
+## 2026-08-27 - Cobertura RUE completa y planificación 1.7.0
+
+### Objetivo
+
+Incorporar el último corte de los cinco perfiles RUE y convertir los tiempos observados en estimaciones operativas para completar el piloto y dimensionar un censo nacional de 5.000 escuelas.
+
+### Datos consolidados
+
+- La extracción privada contiene 88 códigos RUE sin duplicados: los 86 códigos del piloto y 2 fichas adicionales fuera de la muestra.
+- Los indicadores del tablero permanecen limitados al catálogo piloto de 85 sedes físicas y 86 códigos MEC; las 2 fichas adicionales no alteran el avance ni el saldo.
+- Estado del piloto: 27 sedes cerradas, 9 guardadas y 49 pendientes; cobertura RUE 86/86.
+- Volumen RUE: 984 subregistros, 28.547 respuestas únicas y 51.079 eventos de historial.
+- Muestra temporal: 27 sedes cerradas, mediana de 356,92 minutos por sede, Q1 de 264,85 y Q3 de 445,81 minutos.
+
+### Implementación
+
+- La vista **Tiempos** separa el saldo del piloto de la proyección para 5.000 escuelas.
+- Se agregaron controles para equipos disponibles, plazo objetivo del piloto y plazo objetivo nacional.
+- Cada escala presenta escenarios bajo, central y alto, días efectivos y equipos mínimos recalculados en tiempo real.
+- Valores centrales predeterminados: 346,42 horas-equipo para el piloto; 7,2 días con 8 equipos y 6 equipos mínimos para una meta de 10 días.
+- Proyección nacional central: 34.204,83 horas-equipo; 712,6 días con 8 equipos y 26 equipos mínimos para una meta de 220 jornadas productivas.
+- La instantánea pública distingue 86 fichas RUE de la muestra, 88 extraídas en total y 2 fuera de catálogo mediante conteos agregados.
+- Se actualizó frontend, esquema público y caché PWA a `1.7.0`.
+
+### Supuestos y límites
+
+- Se aplican 6 horas productivas por equipo y día, 22 jornadas productivas por mes y 15% de contingencia.
+- Los tiempos representan sesiones observadas en RUE, no permanencia presencial continua.
+- La proyección nacional se calibra con Capital y Central; todavía no modela traslados, ruralidad, conectividad ni composición del equipo.
+- Los escenarios Q1, mediana y Q3 deben conservarse juntos para decisiones operativas y presupuestarias.
+
+### Validación local
+
+- Exportador: 2 pruebas aprobadas, incluida la separación de fichas fuera de la muestra.
+- Validación estática: `PASS` para 85 sedes, 86 códigos MEC, esquema `2026-08-27.1` y versión `1.7.0`.
+- Auditoría de privacidad: `PASS`.
+- Playwright: 13 pruebas aprobadas y 1 omisión intencional en escritorio y celular.
+- La vista de planificación respondió a equipos, plazos y filtros; no presentó desbordamiento horizontal.
+- Revisión visual de capturas de planificación en 1440 x 900 y Pixel 7: sin solapamientos ni controles truncados.
+- Debido a archivos vacíos generados por la sincronización de Drive dentro de `node_modules`, la suite de navegador se ejecutó desde una copia temporal local creada con el mismo `package-lock.json`.
+
+### Estado de publicación
+
+- Instantánea generada con corte 2026-08-27 y privacidad `PASS`.
+- Publicación en `production/main` y verificación de GitHub Pages pendientes del cierre de esta intervención.
+
 ## 2026-08-26 - Muestra completa y cobertura RUE 1.6.0
 
 ### Objetivo

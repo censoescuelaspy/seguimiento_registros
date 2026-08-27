@@ -23,7 +23,8 @@ class DashboardExportTest(unittest.TestCase):
             """
             CREATE TABLE rue_instituciones AS SELECT * FROM (VALUES
               ('0000001','Escuela Uno','Capital','Asunción','Centro','Cerrado en campo','01/08/2026','02/08/2026',-25.3,-57.6,2,1,4,2,0,0,1,10,100,'2026-08-01T08:00:00-03:00','2026-08-01T12:00:00-03:00',1,240.0,20),
-              ('0000002','Escuela Dos','Central','Capiatá','Centro','Pendiente','','',-25.4,-57.5,0,0,0,0,0,0,0,0,0,'','',0,NULL,0)
+              ('0000002','Escuela Dos','Central','Capiatá','Centro','Pendiente','','',-25.4,-57.5,0,0,0,0,0,0,0,0,0,'','',0,NULL,0),
+              ('0000099','Escuela Fuera de Muestra','Central','Luque','Centro','Pendiente','','',-25.3,-57.5,0,0,0,0,0,0,0,0,0,'','',0,NULL,0)
             ) AS t(codigo_mec,nombre_establecimiento,departamento,distrito,localidad_barrio,estado,fecha_iniciado_rue,fecha_actualizado_rue,latitud_decimal,longitud_decimal,bloques_plantas,areas_recreacion,aulas,dependencias,laboratorios,talleres,sanitarios,subregistros_total,respuestas_unicas,actividad_primera,actividad_ultima,sesiones_observadas,tiempo_en_sesiones_minutos,eventos_historial)
             """
         )
@@ -93,6 +94,8 @@ class DashboardExportTest(unittest.TestCase):
             self.assertEqual(written["metrics"]["institutionCodes"], 4)
             self.assertEqual(written["metrics"]["ruePhysicalSites"], 2)
             self.assertEqual(written["metrics"]["rueInstitutionCodes"], 2)
+            self.assertEqual(written["metrics"]["rueExtractedInstitutionCodes"], 3)
+            self.assertEqual(written["metrics"]["rueExtraInstitutionCodes"], 1)
             self.assertEqual(written["metrics"]["withoutRueRecord"], 1)
             self.assertEqual(written["metrics"]["closed"], 1)
             self.assertEqual(written["metrics"]["pending"], 2)
@@ -104,6 +107,11 @@ class DashboardExportTest(unittest.TestCase):
             self.assertEqual(written["schools"][1]["codes"], ["0000002", "0000003"])
             self.assertEqual(written["schools"][1]["rueCoverageKey"], "partial")
             self.assertFalse(written["schools"][2]["rueAvailable"])
+            self.assertEqual(written["assumptions"]["nationalSchoolTarget"], 5000)
+            self.assertEqual(written["assumptions"]["nationalTargetDays"], 220)
+            self.assertEqual(written["metrics"]["nationalScenarios"][1]["adjustedHours"], 23000)
+            self.assertEqual(written["schemaVersion"], "2026-08-27.1")
+            self.assertEqual(written["appVersion"], "1.7.0")
             self.assertEqual(json.loads(audit.read_text(encoding="utf-8"))["status"], "PASS")
             self.assertEqual(EXPORT.privacy_findings(written), [])
 

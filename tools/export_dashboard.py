@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "data" / "dashboard.json"
 DEFAULT_AUDIT = Path(__file__).resolve().parents[1] / "reports" / "privacy_audit.json"
 FORBIDDEN_KEYS = {
@@ -149,6 +149,32 @@ def scenario_metrics(schools: list[dict[str, Any]], closed_distribution: dict[st
             elif school["statusKey"] == "saved":
                 remaining_minutes += max(target - float(school["observedMinutes"] or 0), 0)
         base_hours = remaining_minutes / 60
+        output.append(
+            {
+                "key": key,
+                "label": label,
+                "targetMinutes": number(target),
+                "baseHours": number(base_hours),
+                "adjustedHours": number(base_hours * (1 + contingency)),
+            }
+        )
+    return output
+
+
+def census_scenario_metrics(
+    total_schools: int,
+    closed_distribution: dict[str, Any],
+    contingency: float = 0.15,
+) -> list[dict[str, Any]]:
+    targets = [
+        ("low", "Bajo", closed_distribution["q1"]),
+        ("central", "Central", closed_distribution["median"]),
+        ("high", "Alto", closed_distribution["q3"]),
+    ]
+    output = []
+    for key, label, target in targets:
+        target = float(target or 0)
+        base_hours = max(0, total_schools) * target / 60
         output.append(
             {
                 "key": key,
@@ -422,6 +448,17 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         database_updated_at = text(
             connection.execute("SELECT MAX(completed_at_asuncion) FROM actualizaciones").fetchone()[0]
         )
+        rue_extracted_codes = scalar(connection, "SELECT COUNT(DISTINCT codigo_mec) FROM rue_instituciones")
+        rue_extra_codes = scalar(
+            connection,
+            """
+            SELECT COUNT(DISTINCT i.codigo_mec)
+            FROM rue_instituciones i
+            LEFT JOIN catalogo_escuelas_piloto c ON c.codigo_mec = i.codigo_mec
+            WHERE c.codigo_mec IS NULL
+            """,
+        )
+        national_school_target = 5000
         metrics = {
             "schools": len(schools),
             "closed": status_counts["closed"],
@@ -443,6 +480,8 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             "institutionCodes": sum(len(item["codes"]) for item in schools),
             "ruePhysicalSites": sum(item["rueAvailable"] for item in schools),
             "rueInstitutionCodes": sum(item["rueCodeCount"] for item in schools),
+            "rueExtractedInstitutionCodes": rue_extracted_codes,
+            "rueExtraInstitutionCodes": rue_extra_codes,
             "withoutRueRecord": sum(not item["rueAvailable"] for item in schools),
             "pilotSchools": sum(len(item["codes"]) for item in schools),
             "pilotPhysicalSites": len(schools),
@@ -481,8 +520,9 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             ),
         }
         metrics["scenarios"] = scenario_metrics(schools, closed_distribution)
+        metrics["nationalScenarios"] = census_scenario_metrics(national_school_target, closed_distribution)
         return {
-            "schemaVersion": "2026-08-26.1",
+            "schemaVersion": "2026-08-27.1",
             "appVersion": VERSION,
             "generatedAt": now.isoformat(),
             "cutoff": database_updated_at[:10] if database_updated_at else now.date().isoformat(),
@@ -492,8 +532,13 @@ def build_snapshot(database: Path) -> dict[str, Any]:
                 "sessionGapMinutes": 30,
                 "contingencyRate": 0.15,
                 "productiveHoursPerTeamDay": 6,
+                "productiveDaysPerMonth": 22,
+                "pilotTargetDays": 10,
+                "nationalSchoolTarget": national_school_target,
+                "nationalTargetDays": 220,
                 "timeScope": "Sesiones observadas en RUE; no equivale a permanencia presencial continua.",
                 "remainingFormula": "Pendientes por objetivo más saldo positivo de guardadas; luego 15% de contingencia.",
+                "nationalScope": "Proyección preliminar calibrada con escuelas cerradas del piloto en Capital y Central; no incorpora todavía diferencias logísticas nacionales.",
             },
             "metrics": metrics,
             "departments": department_rows,

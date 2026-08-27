@@ -1,6 +1,6 @@
 {
   "name": "cialpa-seguimiento-relevamiento",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "description": "Tablero seguro de seguimiento del relevamiento escolar CIALPA.",
   "scripts": {

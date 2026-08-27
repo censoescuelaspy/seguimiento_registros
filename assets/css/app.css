@@ -354,6 +354,12 @@ img { max-width: 100%; }
 .team-calculator { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--line-200); border-left: 4px solid var(--coral-600); border-radius: 5px; background: var(--surface); }
 .team-calculator h2 { margin: 0; font-size: .9rem; }
 .team-calculator p { margin: 3px 0 0; color: var(--ink-500); font-size: .7rem; }
+.planning-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
+.planning-control { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--line-200); border-left: 4px solid var(--coral-600); border-radius: 5px; background: var(--surface); }
+.planning-control:nth-child(2) { border-left-color: var(--teal-700); }
+.planning-control:nth-child(3) { border-left-color: var(--blue-700); }
+.planning-control h2 { margin: 0; font-size: .82rem; }
+.planning-control p { margin: 3px 0 0; color: var(--ink-500); font-size: .66rem; line-height: 1.35; }
 .stepper { display: grid; grid-template-columns: 38px 54px 38px; align-items: center; }
 .stepper button { height: 38px; border: 1px solid var(--line-300); color: var(--navy-900); background: #fff; font-size: 1.1rem; font-weight: 800; }
 .stepper button:first-child { border-radius: 5px 0 0 5px; }
@@ -364,7 +370,23 @@ img { max-width: 100%; }
 .scenario-card.central { border-top: 3px solid var(--coral-600); }
 .scenario-card span { color: var(--ink-500); font-size: .7rem; font-weight: 750; }
 .scenario-card strong { display: block; margin: 8px 0 2px; font-size: 1.55rem; }
-.scenario-card small { color: var(--ink-500); font-size: .68rem; }
+.scenario-card small { color: var(--ink-500); font-size: .68rem; line-height: 1.5; }
+.forecast-section { margin: 0 0 22px; padding: 18px 0 6px; border-top: 2px solid var(--teal-700); }
+.forecast-section.national-forecast { border-top-color: var(--blue-700); }
+.forecast-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.forecast-header h2 { margin: 2px 0 3px; font-size: 1.05rem; }
+.forecast-header p { margin: 0; color: var(--ink-500); font-size: .7rem; }
+.forecast-central { display: grid; grid-template-columns: minmax(220px, .75fr) minmax(0, 1.4fr); align-items: center; gap: 18px; margin-bottom: 10px; padding: 15px 16px; background: var(--surface-raised); }
+.forecast-central > div > span { display: block; color: var(--ink-500); font-size: .68rem; font-weight: 750; }
+.forecast-central > div > strong { display: block; margin: 4px 0 2px; color: var(--navy-900); font-size: 1.65rem; }
+.forecast-central > div > small { color: var(--ink-500); font-size: .66rem; line-height: 1.4; }
+.forecast-central dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--line-200); }
+.forecast-central dl div { min-width: 0; padding: 9px 11px; background: #fff; }
+.forecast-central dt { color: var(--ink-500); font-size: .62rem; }
+.forecast-central dd { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--ink-900); font-size: .82rem; font-weight: 800; }
+.national-forecast .forecast-central > div > strong { color: var(--blue-700); }
+.planning-caveat { align-items: flex-start; margin: 0 0 18px; }
+.planning-caveat strong { color: var(--ink-900); }
 
 .evidence-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .evidence-toolbar .segmented { min-width: 0; grid-template-columns: repeat(5, minmax(105px, 1fr)); flex: 1; }
@@ -569,6 +591,8 @@ img { max-width: 100%; }
   .map-toolbar .school-jump { width: 100%; }
   .map-legend { width: 100%; margin-left: 0; justify-content: center; }
   #school-map { min-height: 520px; }
+  .planning-controls { grid-template-columns: 1fr; }
+  .forecast-central { grid-template-columns: 1fr; }
   .scenario-grid { grid-template-columns: 1fr; }
   .evidence-toolbar { align-items: stretch; flex-direction: column; }
   .evidence-toolbar .segmented { display: flex; overflow-x: auto; }
@@ -600,6 +624,9 @@ img { max-width: 100%; }
   .pdf-page-grid { grid-template-columns: 1fr; }
   .drawer-tabs { position: sticky; top: 72px; z-index: 1; }
   .team-calculator { grid-template-columns: 1fr; }
+  .planning-control { grid-template-columns: 1fr auto; }
+  .forecast-header { align-items: flex-start; flex-direction: column; }
+  .forecast-central dl { grid-template-columns: 1fr; }
   .stepper { justify-self: start; }
 }
 

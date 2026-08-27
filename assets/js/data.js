@@ -97,6 +97,22 @@ export function estimateScenarios(schools, timeDistribution, contingencyRate = 0
   });
 }
 
+export function estimateCensusScenarios(totalSchools, timeDistribution, contingencyRate = 0.15) {
+  const schools = Math.max(0, Number(totalSchools || 0));
+  const targets = [
+    ['low', 'Bajo', Number(timeDistribution.q1 || 0)],
+    ['central', 'Central', Number(timeDistribution.median || 0)],
+    ['high', 'Alto', Number(timeDistribution.q3 || 0)]
+  ];
+  return targets.map(([key, label, targetMinutes]) => {
+    const baseHours = schools * targetMinutes / 60;
+    return {
+      key, label, targetMinutes, baseHours,
+      adjustedHours: baseHours * (1 + contingencyRate)
+    };
+  });
+}
+
 function numericDistribution(values) {
   const clean = values.map(Number).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
   const quantile = (fraction) => {
@@ -128,8 +144,17 @@ export function timeMetricsForSchools(schools) {
 }
 
 export function daysForScenario(scenario, teams, productiveHours = 6) {
-  const capacity = Math.max(1, Number(teams || 1)) * productiveHours;
+  const capacity = Math.max(1, Number(teams || 1)) * Math.max(0.1, Number(productiveHours || 6));
   return scenario.adjustedHours / capacity;
+}
+
+export function minimumTeamsForScenario(scenario, targetDays, productiveHours = 6) {
+  const capacityPerTeam = Math.max(1, Number(targetDays || 1)) * Math.max(0.1, Number(productiveHours || 6));
+  return scenario.adjustedHours > 0 ? Math.ceil(scenario.adjustedHours / capacityPerTeam) : 0;
+}
+
+export function productiveMonthsForDays(days, productiveDaysPerMonth = 22) {
+  return Number(days || 0) / Math.max(1, Number(productiveDaysPerMonth || 22));
 }
 
 export function sortSchools(schools, sort) {
