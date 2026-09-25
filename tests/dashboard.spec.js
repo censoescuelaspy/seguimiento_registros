@@ -5,7 +5,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
-  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.7.0');
+  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.8.0');
 }
 
 async function navigate(page, name) {
@@ -22,7 +22,7 @@ test('login, resumen y filtros globales', async ({ page }, testInfo) => {
   const pending = page.getByRole('button', { name: 'Pendientes', exact: true });
   await pending.click();
   await expect(pending).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#filter-count')).toHaveText('49 sedes');
+  await expect(page.locator('#filter-count')).toHaveText('26 sedes');
   await page.locator('#filter-search').fill('Cleto Romero');
   await expect(page.locator('#filter-count')).toHaveText('0 sedes');
   await page.getByRole('button', { name: 'Restablecer filtros' }).click();
@@ -52,19 +52,19 @@ test('escenarios de tiempo responden a equipos y filtros', async ({ page }, test
   await navigate(page, 'Tiempos');
   await expect(page.getByRole('heading', { name: 'Tiempo restante y equipos necesarios' })).toBeVisible();
   await expect(page.locator('#team-count-output')).toHaveText('8');
-  await expect(page.locator('#pilot-central-hours')).toHaveText('346,4 h');
-  await expect(page.locator('#pilot-minimum-teams')).toHaveText('6 equipos');
-  await expect(page.locator('#national-central-hours')).toHaveText('34.204,8 h');
-  await expect(page.locator('#national-minimum-teams')).toHaveText('26 equipos');
+  await expect(page.locator('#pilot-central-hours')).toHaveText('182,5 h');
+  await expect(page.locator('#pilot-minimum-teams')).toHaveText('4 equipos');
+  await expect(page.locator('#national-central-hours')).toHaveText('32.712,7 h');
+  await expect(page.locator('#national-minimum-teams')).toHaveText('25 equipos');
   await page.getByRole('button', { name: 'Agregar equipo' }).click();
   await expect(page.locator('#team-count-output')).toHaveText('9');
   await expect(page.locator('.scenario-card')).toHaveCount(6);
   await page.getByRole('button', { name: 'Reducir plazo del piloto' }).click();
   await expect(page.locator('#pilot-days-output')).toHaveText('9');
-  await expect(page.locator('#pilot-minimum-teams')).toHaveText('7 equipos');
+  await expect(page.locator('#pilot-minimum-teams')).toHaveText('4 equipos');
   await page.getByRole('button', { name: 'Aumentar plazo nacional' }).click();
   await expect(page.locator('#national-days-output')).toHaveText('230');
-  await expect(page.locator('#national-minimum-teams')).toHaveText('25 equipos');
+  await expect(page.locator('#national-minimum-teams')).toHaveText('24 equipos');
   const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
   expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client + 1);
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-times.png`, fullPage: true });

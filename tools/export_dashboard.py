@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "data" / "dashboard.json"
 DEFAULT_AUDIT = Path(__file__).resolve().parents[1] / "reports" / "privacy_audit.json"
 FORBIDDEN_KEYS = {
@@ -117,8 +117,14 @@ def quantile(values: Iterable[float], fraction: float) -> float | None:
     return clean[lower] * (1 - weight) + clean[upper] * weight
 
 
-def distribution(values: Iterable[Any]) -> dict[str, float | int | None]:
-    clean = [float(item) for item in values if item is not None and math.isfinite(float(item)) and float(item) > 0]
+def distribution(values: Iterable[Any], *, include_zero: bool = False) -> dict[str, float | int | None]:
+    clean = [
+        float(item)
+        for item in values
+        if item is not None
+        and math.isfinite(float(item))
+        and (float(item) >= 0 if include_zero else float(item) > 0)
+    ]
     if not clean:
         return {"n": 0, "min": None, "q1": None, "median": None, "mean": None, "q3": None, "max": None}
     return {
@@ -346,18 +352,14 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             elif coverage == "complete" and source_statuses and all(item == "closed" for item in source_statuses):
                 site_status_key = "closed"
                 site_status = "Cerrado en campo"
-            elif any(item in {"closed", "saved"} for item in source_statuses):
+            elif source_statuses and all(item in {"closed", "saved"} for item in source_statuses):
                 site_status_key = "saved"
                 site_status = "Carga parcial o guardada"
             else:
                 site_status_key = "pending"
                 site_status = "Pendiente"
 
-            observed_values = [
-                float(row["tiempo_en_sesiones_minutos"])
-                for row in available
-                if row.get("tiempo_en_sesiones_minutos") is not None
-            ]
+            observed_values = [float(row.get("tiempo_en_sesiones_minutos") or 0) for row in available]
             link_statuses = sorted({text(row.get("estados_vinculo")) for row in rows if text(row.get("estados_vinculo"))})
             site_blocks = [item for code in codes for item in blocks.get(code, [])]
             site_rooms = [item for code in codes for item in rooms.get(code, [])]
@@ -396,7 +398,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
                         "uniqueAnswers": summed(available, "respuestas_unicas"),
                         "events": summed(available, "eventos_historial"),
                     },
-                    "observedMinutes": number(sum(observed_values)) if observed_values else None,
+                    "observedMinutes": number(max(observed_values)) if observed_values else None,
                     "observedSessions": summed(available, "sesiones_observadas"),
                     "media": {
                         "folders": summed(rows, "carpetas_medios"),
@@ -424,7 +426,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         status_counts = Counter(item["statusKey"] for item in schools)
         closed_times = [item["observedMinutes"] for item in schools if item["statusKey"] == "closed"]
         saved_times = [item["observedMinutes"] for item in schools if item["statusKey"] == "saved"]
-        closed_distribution = distribution(closed_times)
+        closed_distribution = distribution(closed_times, include_zero=True)
         department_rows = []
         for department in sorted({item["department"] for item in schools}):
             subset = [item for item in schools if item["department"] == department]
@@ -522,7 +524,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         metrics["scenarios"] = scenario_metrics(schools, closed_distribution)
         metrics["nationalScenarios"] = census_scenario_metrics(national_school_target, closed_distribution)
         return {
-            "schemaVersion": "2026-08-27.1",
+            "schemaVersion": "2026-09-25.1",
             "appVersion": VERSION,
             "generatedAt": now.isoformat(),
             "cutoff": database_updated_at[:10] if database_updated_at else now.date().isoformat(),

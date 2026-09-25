@@ -110,8 +110,8 @@ class DashboardExportTest(unittest.TestCase):
             self.assertEqual(written["assumptions"]["nationalSchoolTarget"], 5000)
             self.assertEqual(written["assumptions"]["nationalTargetDays"], 220)
             self.assertEqual(written["metrics"]["nationalScenarios"][1]["adjustedHours"], 23000)
-            self.assertEqual(written["schemaVersion"], "2026-08-27.1")
-            self.assertEqual(written["appVersion"], "1.7.0")
+            self.assertEqual(written["schemaVersion"], "2026-09-25.1")
+            self.assertEqual(written["appVersion"], "1.8.0")
             self.assertEqual(json.loads(audit.read_text(encoding="utf-8"))["status"], "PASS")
             self.assertEqual(EXPORT.privacy_findings(written), [])
 

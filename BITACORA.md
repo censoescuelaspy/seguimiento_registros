@@ -1,5 +1,16 @@
 # Bitácora
 
+## 2026-09-25 - Actualización de avance y planificación 1.8.0
+
+- Se exportó la instantánea sanitizada desde la base maestra validada del 2026-09-25.
+- Estado del piloto: 57 sedes cerradas, 2 guardadas y 26 pendientes; cobertura RUE completa para los 86 códigos de las 85 sedes.
+- Base consolidada: 2.021 subregistros, 61.244 respuestas únicas y 78.488 eventos de historial.
+- Escenario central: 182,5 horas-equipo restantes para el piloto y 32.712,7 horas-equipo para 5.000 escuelas.
+- La proyección nacional requiere 25 equipos para 220 jornadas productivas, equivalentes a 50 censistas en parejas o 75 en ternas.
+- Se alineó la agregación por sede física con el informe: prevalece el estado más atrasado de los códigos compartidos y el tiempo de sede usa el máximo observado.
+- Se actualizó el esquema público, la versión visible y la caché PWA a `1.8.0`.
+- La auditoría de privacidad no publica respuestas RUE, usuarios, rutas privadas, archivos ni enlaces de Drive.
+
 ## 2026-08-27 - Cobertura RUE completa y planificación 1.7.0
 
 ### Objetivo
