@@ -5,10 +5,10 @@ Tablero web instalable para consultar el avance de infraestructura escolar, expl
 ## Estado del corte
 
 - Fuente analítica: `CIALPA_RUE_FOTOS.duckdb`.
-- Corte publicado: 2026-09-25.
+- Corte publicado: 2026-10-08.
 - Muestra: 85 sedes físicas y 86 códigos MEC; una sede agrupa dos códigos.
 - Cobertura RUE del piloto: 86 de 86 códigos y 85 de 85 sedes. La extracción privada contiene además 2 fichas fuera de la muestra, separadas de los indicadores del piloto.
-- Avance: 57 sedes cerradas, 2 guardadas y 26 pendientes.
+- Avance: 66 sedes cerradas, 1 guardada y 18 pendientes.
 - Frontend: HTML, CSS y JavaScript modular sin compilación.
 - Mapas: Leaflet con OpenStreetMap y Esri World Imagery.
 - Figuras: Chart.js.
@@ -30,7 +30,7 @@ Desde la versión `1.2.0`, el tablero informa la conciliación foto por foto rea
 
 La vista **Tiempos** calcula el saldo del piloto y una proyección para 5.000 escuelas mediante tres escenarios basados en el Q1, la mediana y el Q3 de las escuelas cerradas. Permite variar los equipos disponibles, el plazo del piloto y el plazo nacional; para cada combinación informa días efectivos y equipos mínimos.
 
-El corte 2026-09-25 usa 57 sedes cerradas, 6 horas productivas por equipo y día y 15% de contingencia. En el escenario central estima 182,5 horas-equipo para completar el piloto y 32.712,7 horas-equipo para 5.000 escuelas. La proyección nacional es preliminar: todavía no incorpora traslados, ruralidad, conectividad ni diferencias territoriales fuera de Capital y Central.
+El corte 2026-10-08 usa 66 sedes cerradas, 6 horas productivas por equipo y día y 15% de contingencia. En el escenario central estima 119,8 horas-equipo para completar el piloto y 31.538,8 horas-equipo para 5.000 escuelas. La proyección nacional es preliminar: todavía no incorpora traslados, ruralidad, conectividad ni diferencias territoriales fuera de Capital y Central.
 
 ## Desarrollo
 

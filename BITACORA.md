@@ -1,5 +1,16 @@
 # Bitácora
 
+## 2026-10-08 - Actualización integral de datos 1.9.0
+
+- Se exportó la instantánea sanitizada desde la base maestra validada del 2026-10-08, que integra las cinco extracciones RUE y el inventario privado de Drive.
+- Estado del piloto: 66 sedes cerradas, 1 guardada y 18 pendientes; cobertura RUE completa para los 86 códigos de las 85 sedes.
+- Base consolidada: 3.039 subregistros, 92.632 respuestas únicas y 103.352 eventos de historial.
+- Medios de Drive conservados: 150 archivos, 74 fotos directas y 30 PDF con 2.090 páginas, vinculados a 29 escuelas. Las imágenes permanecen privadas y se consultan únicamente mediante el backend autenticado.
+- Escenario central: 119,8 horas-equipo restantes para el piloto y 31.538,8 horas-equipo para 5.000 escuelas.
+- La proyección nacional requiere 24 equipos para 220 jornadas productivas, equivalentes a 48 censistas en parejas o 72 en ternas.
+- Se actualizó el esquema público a `2026-10-08.1`, la versión visible y la caché PWA a `1.9.0`.
+- La auditoría de privacidad terminó en `PASS`: no publica respuestas RUE, usuarios, rutas privadas, archivos ni enlaces de Drive.
+
 ## 2026-09-25 - Actualización de avance y planificación 1.8.0
 
 - Se exportó la instantánea sanitizada desde la base maestra validada del 2026-09-25.

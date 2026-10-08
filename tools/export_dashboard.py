@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "data" / "dashboard.json"
 DEFAULT_AUDIT = Path(__file__).resolve().parents[1] / "reports" / "privacy_audit.json"
 FORBIDDEN_KEYS = {
@@ -524,7 +524,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         metrics["scenarios"] = scenario_metrics(schools, closed_distribution)
         metrics["nationalScenarios"] = census_scenario_metrics(national_school_target, closed_distribution)
         return {
-            "schemaVersion": "2026-09-25.1",
+            "schemaVersion": "2026-10-08.1",
             "appVersion": VERSION,
             "generatedAt": now.isoformat(),
             "cutoff": database_updated_at[:10] if database_updated_at else now.date().isoformat(),
