@@ -119,6 +119,26 @@ class DashboardExportTest(unittest.TestCase):
         findings = EXPORT.privacy_findings({"schools": [{"drive_url": "https://example.invalid"}]})
         self.assertEqual(findings[0]["rule"], "forbidden_key")
 
+    def test_outside_pilot_activity_does_not_change_progress_or_forecasts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "test.duckdb"
+            self.create_database(database)
+            before = EXPORT.build_snapshot(database)
+            with duckdb.connect(str(database)) as connection:
+                connection.execute(
+                    """
+                    UPDATE rue_instituciones
+                    SET estado = 'Cerrado en campo',
+                        tiempo_en_sesiones_minutos = 999.0,
+                        sesiones_observadas = 100, eventos_historial = 10000
+                    WHERE codigo_mec = '0000099'
+                    """
+                )
+            after = EXPORT.build_snapshot(database)
+            self.assertEqual(after["schools"], before["schools"])
+            self.assertEqual(after["metrics"], before["metrics"])
+            self.assertEqual(after["departments"], before["departments"])
+
 
 if __name__ == "__main__":
     unittest.main()

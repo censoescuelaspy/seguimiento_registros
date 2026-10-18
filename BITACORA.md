@@ -1,5 +1,19 @@
 # Bitácora
 
+## 2026-10-17 - Actualización de los cinco perfiles y conservación histórica
+
+- Se reconstruyó y validó la base privada con los cinco paquetes nuevos y el inventario de Drive. Se conservaron los respaldos anteriores y no se modificaron datos en RUE.
+- Extracción: 178 códigos únicos frente a 88; 179 apariciones entre perfiles, con una ficha compartida contada una sola vez. El piloto sigue en 85 sedes y 86 códigos; los 92 códigos externos no amplían la muestra.
+- Avance del piloto: 69 cerradas, 1 guardada y 15 pendientes; antes, 66/1/18.
+- Volumen consolidado: 4.225 subregistros, 129.397 respuestas originales, 128.117 únicas y 124.858 eventos. No faltan códigos ni eventos del corte anterior.
+- Se corrigió la selección de fuentes en el compilador privado para no duplicar respuestas o espacios compartidos. Se preservaron 335 eventos auténticos del respaldo con procedencia histórica explícita; no se presentaron como descarga actual. Otros 42 eventos inicialmente ausentes se recuperaron por consultas complementarias al RUE, que aportaron además 22 eventos.
+- Drive no presentó archivos nuevos: 150 originales, 74 fotos directas, 30 PDF, 3.036 fotos PDF y 6.072 derivados privados; 3.110 fotografías lógicas preservadas. Persisten dos archivos CAD no materializados ya documentados, ajenos al corpus fotográfico.
+- Se exportó exclusivamente la instantánea sanitizada. Auditoría de privacidad PASS, sin hallazgos. La versión de código permanece en 1.9.0 y el esquema en 2026-10-08.1; la fecha de datos cambia al 2026-10-17.
+- Escenario central vigente: 106,8 horas-equipo para el saldo del piloto; 33.400,8 para 5.000 escuelas, equivalentes a 26 equipos en 220 jornadas de 6 horas. No se cambió la fórmula. Doce sedes cerradas carecen de duración positiva, once sin eventos: los ceros afectan los cuantiles y exigen revisión antes de presupuestar.
+- Pruebas: tres controles del exportador (incluida independencia del avance respecto de actividad externa al piloto), validación estática y 13 pruebas Playwright aprobadas con una omisión intencional. Revisión visual del mapa de escritorio y planificación móvil; sin desbordamiento horizontal.
+- Por placeholders vacíos en las dependencias de la unidad sincronizada, las pruebas se ejecutaron desde una copia local del mismo commit, con el lockfile existente y las modificaciones verificadas. Las fotos privadas se simulan en esas pruebas; no equivalen a una sesión autenticada real de consulta fotográfica.
+- Publicación y verificación final de la URL pendientes al registrar esta entrada; la evidencia de despliegue se conserva en el control privado de publicación.
+
 ## 2026-10-08 - Actualización integral de datos 1.9.0
 
 - Se exportó la instantánea sanitizada desde la base maestra validada del 2026-10-08, que integra las cinco extracciones RUE y el inventario privado de Drive.

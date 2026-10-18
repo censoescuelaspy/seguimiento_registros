@@ -7,6 +7,7 @@
 3. Generar la instantánea pública con `python tools/export_dashboard.py`.
 4. Confirmar las invariantes de la muestra: 85 sedes físicas, 86 códigos MEC y ausencia de códigos duplicados fuera de la sede compartida documentada.
 5. Comparar la cobertura RUE y los medios con el corte anterior. Una disminución exige detener la publicación y explicar la causa.
+   Si una institución aparece en varios perfiles, la base conserva todas las fuentes, pero sus tablas vigentes usan una única captura seleccionada. Verificar los conteos por institución y la preservación del historial antes de exportar.
 6. Revisar `reports/privacy_audit.json`; todos los controles deben estar en `PASS`.
 7. Ejecutar `npm run check`.
 8. Revisar `git diff` y confirmar que solo cambien datos sanitizados, código previsto, versión y bitácora.

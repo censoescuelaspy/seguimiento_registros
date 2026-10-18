@@ -1,4 +1,14 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const snapshot = JSON.parse(readFileSync('assets/data/dashboard.json', 'utf8'));
+const pilotCentral = snapshot.metrics.scenarios.find((item) => item.key === 'central');
+const nationalCentral = snapshot.metrics.nationalScenarios.find((item) => item.key === 'central');
+const hoursText = (value) => `${new Intl.NumberFormat('es-PY', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)} h`;
+const teamsText = (hours, days) => {
+  const count = hours > 0 ? Math.ceil(hours / (days * snapshot.assumptions.productiveHoursPerTeamDay)) : 0;
+  return `${count} ${count === 1 ? 'equipo' : 'equipos'}`;
+};
 
 async function login(page) {
   await page.goto('/?demo=1');
@@ -22,7 +32,7 @@ test('login, resumen y filtros globales', async ({ page }, testInfo) => {
   const pending = page.getByRole('button', { name: 'Pendientes', exact: true });
   await pending.click();
   await expect(pending).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#filter-count')).toHaveText('18 sedes');
+  await expect(page.locator('#filter-count')).toHaveText(`${snapshot.metrics.pending} ${snapshot.metrics.pending === 1 ? 'sede' : 'sedes'}`);
   await page.locator('#filter-search').fill('Cleto Romero');
   await expect(page.locator('#filter-count')).toHaveText('0 sedes');
   await page.getByRole('button', { name: 'Restablecer filtros' }).click();
@@ -52,19 +62,19 @@ test('escenarios de tiempo responden a equipos y filtros', async ({ page }, test
   await navigate(page, 'Tiempos');
   await expect(page.getByRole('heading', { name: 'Tiempo restante y equipos necesarios' })).toBeVisible();
   await expect(page.locator('#team-count-output')).toHaveText('8');
-  await expect(page.locator('#pilot-central-hours')).toHaveText('119,8 h');
-  await expect(page.locator('#pilot-minimum-teams')).toHaveText('2 equipos');
-  await expect(page.locator('#national-central-hours')).toHaveText('31.538,8 h');
-  await expect(page.locator('#national-minimum-teams')).toHaveText('24 equipos');
+  await expect(page.locator('#pilot-central-hours')).toHaveText(hoursText(pilotCentral.adjustedHours));
+  await expect(page.locator('#pilot-minimum-teams')).toHaveText(teamsText(pilotCentral.adjustedHours, 10));
+  await expect(page.locator('#national-central-hours')).toHaveText(hoursText(nationalCentral.adjustedHours));
+  await expect(page.locator('#national-minimum-teams')).toHaveText(teamsText(nationalCentral.adjustedHours, 220));
   await page.getByRole('button', { name: 'Agregar equipo' }).click();
   await expect(page.locator('#team-count-output')).toHaveText('9');
   await expect(page.locator('.scenario-card')).toHaveCount(6);
   await page.getByRole('button', { name: 'Reducir plazo del piloto' }).click();
   await expect(page.locator('#pilot-days-output')).toHaveText('9');
-  await expect(page.locator('#pilot-minimum-teams')).toHaveText('3 equipos');
+  await expect(page.locator('#pilot-minimum-teams')).toHaveText(teamsText(pilotCentral.adjustedHours, 9));
   await page.getByRole('button', { name: 'Aumentar plazo nacional' }).click();
   await expect(page.locator('#national-days-output')).toHaveText('230');
-  await expect(page.locator('#national-minimum-teams')).toHaveText('23 equipos');
+  await expect(page.locator('#national-minimum-teams')).toHaveText(teamsText(nationalCentral.adjustedHours, 230));
   const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
   expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client + 1);
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-times.png`, fullPage: true });
@@ -76,9 +86,9 @@ test('evidencias protegidas por escuela y especialidad', async ({ page }, testIn
   await login(page);
   await navigate(page, 'Evidencias');
   await expect(page.getByRole('heading', { name: 'Evidencias por escuela' })).toBeVisible();
-  await expect(page.locator('.notice').filter({ hasText: 'Relación foto-RUE' })).toContainText('74 de 74 fotos conciliadas');
-  await expect(page.locator('.kpi-card').filter({ hasText: 'Fotos conciliadas con RUE' }).locator('strong')).toHaveText('74');
-  await expect(page.locator('.kpi-card').filter({ hasText: 'Fotos por revisar' }).locator('strong')).toHaveText('0');
+  await expect(page.locator('.notice').filter({ hasText: 'Relación foto-RUE' })).toContainText(`${snapshot.metrics.photoLinksConfirmed} de ${snapshot.metrics.ocrPhotos} fotos conciliadas`);
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Fotos conciliadas con RUE' }).locator('strong')).toHaveText(String(snapshot.metrics.photoLinksConfirmed));
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Fotos por revisar' }).locator('strong')).toHaveText(String(snapshot.metrics.photoLinksReview));
   await page.getByRole('button', { name: 'Electricidad', exact: true }).click();
   await expect(page.locator('.kpi-card').filter({ hasText: 'Evidencias autorizadas' }).locator('strong')).toHaveText('2');
   await page.getByRole('button', { name: /ESCUELA BÁSICA N° 203 PROFESOR CLETO ROMERO/i }).click();
