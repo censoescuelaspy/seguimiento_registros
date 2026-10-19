@@ -15,7 +15,7 @@ async function login(page) {
   await expect(page.getByRole('heading', { name: 'Tablero de seguimiento' })).toBeVisible();
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await expect(page.getByRole('heading', { name: 'Resumen del avance' })).toBeVisible();
-  await expect(page.locator('.sidebar-foot strong')).toHaveText('v1.9.0');
+  await expect(page.locator('.sidebar-foot strong')).toHaveText(`v${snapshot.appVersion}`);
 }
 
 async function navigate(page, name) {
@@ -40,6 +40,38 @@ test('login, resumen y filtros globales', async ({ page }, testInfo) => {
   await page.locator('#filter-rue').selectOption('none');
   await expect(page.locator('#filter-count')).toHaveText('0 sedes');
   await page.screenshot({ path: `artifacts/${testInfo.project.name}-overview.png`, fullPage: false });
+});
+
+test('padrón nacional, filtros, orden y exportación', async ({ page }, testInfo) => {
+  await login(page);
+  await navigate(page, 'Matrícula y aulas');
+  await expect(page.locator('#filterbar')).toBeHidden();
+  await expect(page.locator('#roster-count')).toContainText('5.448');
+  await expect(page.locator('.roster-table tbody tr')).toHaveCount(100);
+  await page.locator('#roster-pilot').check();
+  await expect(page.locator('#roster-count')).toContainText('86 locales');
+  await expect(page.locator('.roster-table tbody tr')).toHaveCount(86);
+  await page.locator('#roster-department').selectOption('CAPITAL');
+  const expected = snapshot.nationalPlanning.schools.filter(s=>s.pilot && s.department==='CAPITAL');
+  await expect(page.locator('.roster-table tbody tr')).toHaveCount(expected.length);
+  await page.locator('#roster-sort').selectOption('enrollment');
+  const maximum = Math.max(...expected.map(s=>s.enrollment));
+  await expect(page.locator('.roster-table tbody tr').first().locator('td').nth(3)).toHaveText(new Intl.NumberFormat('es-PY').format(maximum));
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#roster-export').click()]);
+  const csv = readFileSync(await download.path(),'utf8');
+  expect(csv.split('\r\n')).toHaveLength(expected.length+1);
+  await page.getByRole('button',{name:'Restablecer padrón'}).click();
+  await page.getByRole('button',{name:'Página siguiente'}).click();
+  await expect(page.locator('#roster-count')).toContainText('101');
+  await page.locator('#roster-search').fill('NO_EXISTE_CIALPA_123');
+  await expect(page.locator('#roster-count')).toContainText('0 locales');
+  await page.getByRole('button',{name:'Restablecer padrón'}).click();
+  const width = await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]);
+  expect(width[0]).toBeLessThanOrEqual(width[1]+1);
+  await page.screenshot({path:`artifacts/${testInfo.project.name}-roster.png`,fullPage:false});
+  await navigate(page, 'Tiempos');
+  await expect(page.locator('#filterbar')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Almacenamiento y respaldo'})).toBeVisible();
 });
 
 test('mapa, navegación rápida y detalle de escuela', async ({ page }, testInfo) => {

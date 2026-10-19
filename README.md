@@ -28,18 +28,20 @@ Desde la versión `1.2.0`, el tablero informa la conciliación foto por foto rea
 
 ## Planificación de tiempos
 
-La vista **Tiempos** calcula el saldo del piloto y una proyección para 5.000 escuelas mediante tres escenarios basados en el Q1, la mediana y el Q3 de las escuelas cerradas. Permite variar los equipos disponibles, el plazo del piloto y el plazo nacional; para cada combinación informa días efectivos y equipos mínimos.
+La vista **Tiempos** calcula el saldo del piloto y una proyección para los **5.448 códigos de local escolar** del padrón MEC corregido. Usa Q1, mediana y Q3 de las 57 sedes cerradas con duración positiva; las 12 cerradas sin tiempo positivo no se consideran trabajo instantáneo. Permite variar equipos y plazos; la meta nacional todavía no está deduplicada por sede física.
 
-El corte 2026-10-17 mantiene el método vigente con 69 sedes cerradas, 6 horas productivas por equipo y día y 15% de contingencia. En el escenario central estima 106,8 horas-equipo para completar el piloto y 33.400,8 horas-equipo para 5.000 escuelas: 26 equipos para una meta de 220 jornadas productivas. La proyección nacional es preliminar: todavía no incorpora traslados, ruralidad, conectividad ni diferencias territoriales fuera de Capital y Central.
+La versión 1.10.0 conserva el corte RUE/Drive 2026-10-17 y las 69 sedes cerradas. Con 6 horas productivas por equipo y día y 15% de contingencia, estima 125,5 horas-equipo para el saldo del piloto y 42.742,2 para el censo completo: 33 equipos para 220 jornadas. Es preliminar: no incorpora traslados, ruralidad, conectividad ni diferencias territoriales fuera de Capital/Central. El cambio frente a 1.9.0 responde a la exclusión de tiempos no medidos y al padrón corregido, no a una caída reciente de productividad.
 
-Limitación temporal del corte: 12 sedes cerradas no tienen duración positiva registrada; 11 carecen de eventos de historial. Esto no significa trabajo de duración cero. Esta actualización conserva la fórmula existente, incluidos los ceros registrados; sus cuantiles y proyecciones requieren revisión metodológica antes de decisiones presupuestarias.
+**Matrícula y aulas** muestra el padrón nacional con búsqueda, departamento, distrito, solo piloto, orden por matrícula/aulas, paginación, ubicación y CSV de toda la selección. Tiene filtros independientes de los del seguimiento piloto. Conserva matrícula MEC (907.091), aulas estimadas por 54 casos piloto consistentes, aulas declaradas/cargadas RUE y origen de cada cifra. El modelo produce 35.007 aulas estimadas; la combinación de referencia para planificación suma 35.058. No son aulas censadas. La matrícula no se recalcula porque RUE no contiene matrícula observada comparable. Las coordenadas tienen corte documental 2026-10-18: 5.252 disponibles y 196 faltantes.
+
+La sección **Almacenamiento y respaldo** usa las 29 escuelas con archivos vinculados: escenario central nacional de 100,5 GB primarios y 251,3 GB protegidos (dos copias y 25% de holgura), con 608,5 GB protegidos en estrés. Es una proyección de volumen, no una cuota de servidor verificada ni un saldo pendiente de subir.
 
 ## Desarrollo
 
 ```powershell
 npm install
 npm run vendor
-python tools/export_dashboard.py
+python tools/export_dashboard.py --database "<base-privada>" --planning "<listado-privado-validado.json>"
 npx playwright install chromium
 npm run check
 npm run serve
@@ -51,7 +53,7 @@ Abrir `http://127.0.0.1:4174/?demo=1` para la simulación local. El modo demo es
 
 ```powershell
 & "<directorio-privado>\ACTUALIZAR_BASE_MAESTRA.ps1"
-python tools/export_dashboard.py --database "<directorio-privado>\CIALPA_RUE_FOTOS.duckdb"
+python tools/export_dashboard.py --database "<directorio-privado>\CIALPA_RUE_FOTOS.duckdb" --planning "<listado-privado-validado.json>"
 npm run check
 ```
 

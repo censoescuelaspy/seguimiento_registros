@@ -1,5 +1,20 @@
 # Bitácora
 
+## 2026-10-19 - Informe y planificación con padrón MEC corregido
+
+- Objetivo: integrar el listado nacional y la calibración del piloto al tablero y al informe Word de avance, tiempo, equipos y almacenamiento.
+- Línea base: main limpio, commit 1590230 igual a production/main; datos públicos al 2026-10-17 y versión 1.9.0. Tres pruebas de datos y validación estática aprobadas.
+- Alcance: exportación sanitizada, vista nacional filtrable, proyección sobre 5448 códigos MEC y corrección de tiempos no medidos; informe local separado del repositorio público. No descargar nuevos datos RUE ni modificar la base.
+- Riesgos: no confundir códigos con sedes, matrícula MEC con matrícula observada, tiempos RUE con trabajo presencial ni extrapolaciones con mediciones nacionales. Mantener fotos y respuestas bajo el backend autenticado existente.
+- Pruebas previstas: exportador, privacidad, regresión temporal, filtros/exportación nacional, escritorio/celular, render Word y verificación pública posterior al despliegue.
+- Implementado: vista Matrícula y aulas con 5448 códigos, filtros propios, orden, paginación, ubicación y CSV; matrícula MEC 907091, aulas modelo 35007 y planificación 35058, 5252 coordenadas y 196 faltantes. Modelo de 54 casos; matrícula no recalculada por ausencia de medición RUE comparable.
+- Tiempos: 57 sedes cerradas con duración positiva, 12 cerradas excluidas solo del ajuste temporal; mediana 409,33 min. Saldo central del piloto 125,46 horas-equipo; censo completo 42742,24, con 33 equipos para 220 jornadas de 6 horas. No implica caída reciente de productividad: cambia el tratamiento de faltantes y el universo.
+- Almacenamiento: inventario disponible en la base, no nueva exploración de Drive. Corpus 599385621 bytes; 29 escuelas con archivos vinculados; nacional central 100,5 GB primarios y 251,3 GB protegidos, estrés 608,5 GB protegidos. Protegido = dos copias y 25% de holgura. No se verificó cuota contratada.
+- Privacidad PASS: exportación por lista explícita de campos, sin respuestas, usuarios, rutas ni enlaces privados. Los originales y la base no se modificaron.
+- Pruebas locales: cinco tests del exportador, validación estática y Playwright con 15 aprobadas y una omisión intencional (control móvil no aplicable a escritorio); escritorio y Pixel 7. Inspección visual de padrón y planificación. Las evidencias privadas se simulan: no equivalen a consulta autenticada real.
+- Dependencias de la carpeta sincronizada incompletas: npm run check ejecutado sobre copia local con npm ci y lockfile sin cambios de dependencias; servidor sirvió los archivos actuales de esta raíz. Fallo inicial del comando Playwright local documentado, no atribuido al código nuevo.
+- Informe Word generado en el entorno privado, con el mismo corte e indicadores; validación de paginación en curso. Publicación y comprobación final pendientes al preparar este commit.
+
 ## 2026-10-17 - Actualización de los cinco perfiles y conservación histórica
 
 - Se reconstruyó y validó la base privada con los cinco paquetes nuevos y el inventario de Drive. Se conservaron los respaldos anteriores y no se modificaron datos en RUE.

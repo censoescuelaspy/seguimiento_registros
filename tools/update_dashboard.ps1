@@ -1,6 +1,8 @@
 param(
   [Parameter(Mandatory = $true)]
   [string]$Database,
+  [Parameter(Mandatory = $true)]
+  [string]$Planning,
   [string]$MasterUpdater = ""
 )
 
@@ -11,7 +13,7 @@ if ($MasterUpdater) {
   & $MasterUpdater
 }
 
-python (Join-Path $PSScriptRoot "export_dashboard.py") --database $Database
+python (Join-Path $PSScriptRoot "export_dashboard.py") --database $Database --planning $Planning
 if ($LASTEXITCODE -ne 0) { throw "Falló la exportación del tablero." }
 
 npm run test:data

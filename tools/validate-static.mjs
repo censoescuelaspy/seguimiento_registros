@@ -6,6 +6,7 @@ const required = [
   'assets/css/app.css', 'assets/data/dashboard.json',
   'assets/js/app.js', 'assets/js/api.js', 'assets/js/charts.js', 'assets/js/config.js',
   'assets/js/data.js', 'assets/js/map.js', 'assets/js/pdf-viewer.js', 'assets/js/utils.js',
+  'assets/js/roster.js',
   'assets/vendor/leaflet/leaflet.css', 'assets/vendor/leaflet/leaflet.js',
   'assets/vendor/chartjs/chart.umd.js', 'assets/vendor/lucide/lucide.min.js',
   'assets/vendor/pdfjs/LICENSE', 'assets/vendor/pdfjs/pdf.mjs', 'assets/vendor/pdfjs/pdf.worker.mjs'
@@ -41,6 +42,18 @@ if (snapshot.metrics.withoutRueRecord !== snapshot.schools.length - ruePhysicalS
 }
 if (snapshot.metrics.withCoordinates !== snapshot.schools.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)).length) {
   throw new Error('El control de coordenadas no coincide.');
+}
+const planning = snapshot.nationalPlanning;
+if (!planning || planning.schools.length !== planning.summary.schools || planning.schools.length !== snapshot.assumptions.nationalSchoolTarget) {
+  throw new Error('El padrón nacional no coincide con la meta del censo.');
+}
+if (new Set(planning.schools.map(s=>s.code)).size !== planning.schools.length) throw new Error('Códigos nacionales duplicados.');
+for (const field of ['enrollment','estimatedClassrooms','planningClassrooms']) {
+  if (planning.schools.reduce((n,s)=>n+s[field],0) !== planning.summary[field]) throw new Error(`Total nacional inconsistente: ${field}`);
+}
+const positiveClosed = snapshot.schools.filter(s=>s.statusKey==='closed' && s.observedMinutes>0).length;
+if (snapshot.metrics.schoolTime.n !== positiveClosed || snapshot.metrics.closedWithoutPositiveTime !== snapshot.metrics.closed-positiveClosed) {
+  throw new Error('La calibración temporal incluye duraciones no positivas o excluye casos medidos.');
 }
 if (snapshot.metrics.ocrPhotos !== snapshot.metrics.directPhotos) {
   throw new Error('El total OCR no coincide con las fotos directas.');

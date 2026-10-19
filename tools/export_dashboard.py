@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "data" / "dashboard.json"
 DEFAULT_AUDIT = Path(__file__).resolve().parents[1] / "reports" / "privacy_audit.json"
 FORBIDDEN_KEYS = {
@@ -56,6 +56,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--audit", type=Path, default=DEFAULT_AUDIT)
+    parser.add_argument("--planning", type=Path, required=True, help="Listado de planificación validado, privado y del mismo corte RUE.")
     return parser.parse_args()
 
 
@@ -147,6 +148,9 @@ def scenario_metrics(schools: list[dict[str, Any]], closed_distribution: dict[st
     ]
     output = []
     for key, label, target in targets:
+        if target is None:
+            output.append({"key": key, "label": label, "targetMinutes": None, "baseHours": None, "adjustedHours": None})
+            continue
         target = float(target or 0)
         remaining_minutes = 0.0
         for school in schools:
@@ -179,6 +183,9 @@ def census_scenario_metrics(
     ]
     output = []
     for key, label, target in targets:
+        if target is None:
+            output.append({"key": key, "label": label, "targetMinutes": None, "baseHours": None, "adjustedHours": None})
+            continue
         target = float(target or 0)
         base_hours = max(0, total_schools) * target / 60
         output.append(
@@ -203,7 +210,88 @@ def group_detail(rows: list[dict[str, Any]], key_name: str) -> dict[str, list[di
     return grouped
 
 
-def build_snapshot(database: Path) -> dict[str, Any]:
+def build_national_planning(path: Path, cutoff: str) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    control = payload["control"]
+    if control["corte_rue"] != cutoff:
+        raise ValueError("Recalibrar el listado de planificación: su corte RUE difiere de la base.")
+    rows = payload["rows"]
+    if any(len(row) != 16 for row in rows):
+        raise ValueError("El listado de planificación no tiene las 16 columnas validadas.")
+    codes = [row[0] for row in rows]
+    if len(codes) != control["escuelas"] or len(codes) != len(set(codes)):
+        raise ValueError("El padrón de planificación contiene faltantes o duplicados.")
+    fields = ["code", "name", "department", "district", "locality", "enrollment", "estimatedClassrooms",
+              "declaredClassrooms", "loadedClassrooms", "planningClassrooms", "classroomSource", "pilot",
+              "rueStatus", "latitude", "longitude", "coordinateSource"]
+    schools = [dict(zip(fields, row)) for row in rows]
+    for school in schools:
+        school["pilot"] = school["pilot"] == "Si"
+        if not re.fullmatch(r"\d{7}", school["code"]):
+            raise ValueError("Código MEC inválido en planificación.")
+        lat, lon = school["latitude"], school["longitude"]
+        if (lat is None) != (lon is None) or (lat is not None and (not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 or not -180 <= lon <= 180)):
+            raise ValueError("Par de coordenadas inválido en planificación.")
+    for field, key in [("enrollment", "matricula_mec"), ("estimatedClassrooms", "aulas_estimadas_modelo"), ("planningClassrooms", "aulas_para_planificacion")]:
+        if sum(s[field] for s in schools) != control[key]:
+            raise ValueError("Las sumas nacionales no coinciden con el control validado.")
+    return {
+        "schools": schools,
+        "summary": {"schools": len(schools), "enrollment": sum(s["enrollment"] for s in schools),
+                    "estimatedClassrooms": sum(s["estimatedClassrooms"] for s in schools),
+                    "planningClassrooms": sum(s["planningClassrooms"] for s in schools),
+                    "withCoordinates": sum(s["latitude"] is not None and s["longitude"] is not None for s in schools)},
+        "model": {"n": control["escuelas_calibracion"], "intercept": payload["modelo"]["coef"][0],
+                  "slope": payload["modelo"]["coef"][1], "mae": payload["modelo"]["mae"], "previousMae": payload["base_mae"],
+                  "enrollmentRange": payload["matricula_rango"]},
+        "enrollmentSource": "MEC julio 2026; matrícula de referencia, no actualizada por el piloto.",
+        "classroomScope": "Modelo calibrado en Capital/Central. Extrapolación fuera de esos departamentos o del rango de matrícula; no equivale a aulas observadas.",
+        "geographyCutoff": "2026-10-18",
+    }
+
+
+def build_storage_metrics(connection: duckdb.DuckDBPyConnection, database: Path, target: int) -> dict[str, Any] | None:
+    columns = {r[0] for r in connection.execute("SELECT column_name FROM information_schema.columns WHERE table_name='media_archivos'").fetchall()}
+    if "bytes" not in columns:
+        return None
+    rows = connection.execute("""
+        WITH originals AS (
+          SELECT codigo_mec,SUM(bytes) AS bytes FROM media_vinculos_escuela
+          WHERE codigo_mec IS NOT NULL AND estado_vinculo IN ('confirmado','probable_revisar') GROUP BY 1
+        ), derivatives AS (
+          SELECT codigo_mec,SUM(bytes) AS bytes FROM media_pdf_foto_archivos
+          WHERE UPPER(COALESCE(estado_generacion,''))='OK' GROUP BY 1
+        )
+        SELECT COALESCE(o.bytes,0)+COALESCE(d.bytes,0) FROM originals o FULL JOIN derivatives d USING(codigo_mec)
+    """).fetchall()
+    sample = [float(row[0]) for row in rows if row[0] and row[0] > 0]
+    if not sample:
+        return None
+    originals = scalar(connection, "SELECT COALESCE(SUM(bytes),0) FROM media_archivos WHERE COALESCE(es_sistema,false)=false")
+    derivatives = scalar(connection, "SELECT COALESCE(SUM(bytes),0) FROM media_pdf_foto_archivos WHERE UPPER(COALESCE(estado_generacion,''))='OK'")
+    support = database.stat().st_size
+    excel = database.parent / "CIALPA_RUE_FOTOS_RESUMEN.xlsx"
+    support += excel.stat().st_size if excel.is_file() else 0
+    exports = database.parent / "exports"
+    support += sum(p.stat().st_size for p in exports.rglob("*") if p.is_file()) if exports.is_dir() else 0
+    manifest = database.parent / "MANIFEST_BASE_MAESTRA.json"
+    if manifest.is_file():
+        support += int(json.loads(manifest.read_text(encoding="utf-8")).get("private_pdf_evidence_index", {}).get("bytes", 0))
+    overhead = support / max(1, scalar(connection, "SELECT COUNT(*) FROM rue_instituciones"))
+    scenarios = []
+    pilot_sites = scalar(connection, "SELECT COUNT(DISTINCT sitio_id) FROM catalogo_escuelas_piloto")
+    for key, label, basis in [("low", "Bajo", quantile(sample, .25)), ("central", "Central", mean(sample)), ("stress", "Estrés", max(sample))]:
+        per_school = basis + overhead
+        scenarios.append({"key": key, "label": label, "bytesPerSchool": number(per_school),
+                          "pilotPrimaryBytes": number(per_school * pilot_sites), "pilotProtectedBytes": number(per_school * pilot_sites * 2.5),
+                          "nationalPrimaryBytes": number(per_school * target), "nationalProtectedBytes": number(per_school * target * 2.5)})
+    return {"sampleSchools": len(sample), "originalBytes": originals, "derivativeBytes": derivatives,
+            "supportBytes": support, "currentBytes": originals + derivatives + support, "scenarios": scenarios,
+            "copies": 2, "headroomRate": .25,
+            "scope": "Archivos vinculados disponibles, no una muestra completa de escuelas cerradas; GB decimales. Proyección de volumen, no cuota contratada. No incluye nuevas fotos de mayor resolución ni retención histórica adicional."}
+
+
+def build_snapshot(database: Path, planning_path: Path | None = None) -> dict[str, Any]:
     connection = duckdb.connect(str(database), read_only=True)
     try:
         school_rows = query_dicts(
@@ -426,7 +514,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         status_counts = Counter(item["statusKey"] for item in schools)
         closed_times = [item["observedMinutes"] for item in schools if item["statusKey"] == "closed"]
         saved_times = [item["observedMinutes"] for item in schools if item["statusKey"] == "saved"]
-        closed_distribution = distribution(closed_times, include_zero=True)
+        closed_distribution = distribution(closed_times)
         department_rows = []
         for department in sorted({item["department"] for item in schools}):
             subset = [item for item in schools if item["department"] == department]
@@ -460,7 +548,8 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             WHERE c.codigo_mec IS NULL
             """,
         )
-        national_school_target = 5000
+        planning = build_national_planning(planning_path, database_updated_at) if planning_path else None
+        national_school_target = planning["summary"]["schools"] if planning else 5000
         metrics = {
             "schools": len(schools),
             "closed": status_counts["closed"],
@@ -510,6 +599,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             "linksProbable": integer(link_counts.get("probable_revisar")),
             "linksUnlinked": integer(link_counts.get("sin_vinculo")),
             "schoolTime": closed_distribution,
+            "closedWithoutPositiveTime": len(closed_times) - closed_distribution["n"],
             "blockTime": distribution(
                 block["observedMinutes"]
                 for school in schools if school["statusKey"] == "closed"
@@ -524,7 +614,7 @@ def build_snapshot(database: Path) -> dict[str, Any]:
         metrics["scenarios"] = scenario_metrics(schools, closed_distribution)
         metrics["nationalScenarios"] = census_scenario_metrics(national_school_target, closed_distribution)
         return {
-            "schemaVersion": "2026-10-08.1",
+            "schemaVersion": "2026-10-19.1",
             "appVersion": VERSION,
             "generatedAt": now.isoformat(),
             "cutoff": database_updated_at[:10] if database_updated_at else now.date().isoformat(),
@@ -545,6 +635,8 @@ def build_snapshot(database: Path) -> dict[str, Any]:
             "metrics": metrics,
             "departments": department_rows,
             "schools": schools,
+            "nationalPlanning": planning,
+            "storage": build_storage_metrics(connection, database, national_school_target),
         }
     finally:
         connection.close()
@@ -584,11 +676,11 @@ def write_outputs(snapshot: dict[str, Any], output: Path, audit_path: Path) -> N
         ],
     }
     audit_path.parent.mkdir(parents=True, exist_ok=True)
-    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     if findings:
         raise RuntimeError(f"La auditoría de privacidad detectó {len(findings)} hallazgo(s).")
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    output.write_text(json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8", newline="\n")
 
 
 def main() -> int:
@@ -601,7 +693,7 @@ def main() -> int:
         print(f"No existe la base indicada: {database}", file=sys.stderr)
         return 2
     try:
-        snapshot = build_snapshot(database)
+        snapshot = build_snapshot(database, args.planning)
         write_outputs(snapshot, args.output.resolve(), args.audit.resolve())
     except Exception as error:  # pragma: no cover - surfaced to the operator
         print(f"ERROR: {error}", file=sys.stderr)

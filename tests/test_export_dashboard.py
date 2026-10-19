@@ -110,14 +110,41 @@ class DashboardExportTest(unittest.TestCase):
             self.assertEqual(written["assumptions"]["nationalSchoolTarget"], 5000)
             self.assertEqual(written["assumptions"]["nationalTargetDays"], 220)
             self.assertEqual(written["metrics"]["nationalScenarios"][1]["adjustedHours"], 23000)
-            self.assertEqual(written["schemaVersion"], "2026-10-08.1")
-            self.assertEqual(written["appVersion"], "1.9.0")
+            self.assertEqual(written["schemaVersion"], "2026-10-19.1")
+            self.assertEqual(written["appVersion"], "1.10.0")
             self.assertEqual(json.loads(audit.read_text(encoding="utf-8"))["status"], "PASS")
             self.assertEqual(EXPORT.privacy_findings(written), [])
 
     def test_privacy_audit_rejects_private_fields(self) -> None:
         findings = EXPORT.privacy_findings({"schools": [{"drive_url": "https://example.invalid"}]})
         self.assertEqual(findings[0]["rule"], "forbidden_key")
+
+    def test_missing_time_is_not_zero_duration_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "test.duckdb"
+            self.create_database(database)
+            with duckdb.connect(str(database)) as db:
+                db.execute("UPDATE rue_instituciones SET estado='Cerrado en campo',tiempo_en_sesiones_minutos=0 WHERE codigo_mec='0000002'")
+            snapshot = EXPORT.build_snapshot(database)
+            self.assertEqual(snapshot['metrics']['closed'], 1)  # Shared site remains pending.
+            with duckdb.connect(str(database)) as db:
+                db.execute("UPDATE rue_instituciones SET tiempo_en_sesiones_minutos=0 WHERE codigo_mec='0000001'")
+            snapshot = EXPORT.build_snapshot(database)
+            self.assertEqual(snapshot['metrics']['schoolTime']['n'], 0)
+            self.assertIsNone(snapshot['metrics']['schoolTime']['median'])
+            self.assertEqual(snapshot['metrics']['closedWithoutPositiveTime'], 1)
+            self.assertIsNone(snapshot['metrics']['nationalScenarios'][1]['adjustedHours'])
+
+    def test_planning_cutoff_and_duplicate_guards(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'planning.json'
+            row = ['0000001'] + [None]*15
+            payload = {'control': {'corte_rue': '2026-10-17', 'escuelas': 2}, 'rows': [row, row]}
+            path.write_text(json.dumps(payload), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'corte'):
+                EXPORT.build_national_planning(path, '2026-10-19')
+            with self.assertRaisesRegex(ValueError, 'duplicados'):
+                EXPORT.build_national_planning(path, '2026-10-17')
 
     def test_outside_pilot_activity_does_not_change_progress_or_forecasts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

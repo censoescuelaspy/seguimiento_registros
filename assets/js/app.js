@@ -10,6 +10,7 @@ import {
   destroySchoolMap, focusSchool, initSchoolMap, invalidateSchoolMap
 } from './map.js';
 import { renderPdfBrowser } from './pdf-viewer.js';
+import { renderRoster } from './roster.js';
 import {
   categoryForPhoto, categoryLabel, debounce, escapeHtml, formatBytes, formatDate,
   formatHours, formatMinutes, formatNumber, formatPercent, icon, normalizeCode,
@@ -17,7 +18,7 @@ import {
 } from './utils.js';
 
 const api = new ApiClient();
-const allowedViews = new Set(['overview', 'map', 'schools', 'times', 'evidence', 'method']);
+const allowedViews = new Set(['overview', 'map', 'schools', 'times', 'roster', 'evidence', 'method']);
 const state = {
   snapshot: null,
   session: loadSession(),
@@ -410,6 +411,7 @@ function navigate(view) {
 function renderView() {
   destroyCharts();
   destroySchoolMap();
+  elements.filterbar.hidden = state.view === 'roster';
   const schools = filteredSchools();
   updateFilterCount();
   const renderers = {
@@ -417,6 +419,7 @@ function renderView() {
     map: renderMapView,
     schools: renderSchoolsView,
     times: renderTimesView,
+    roster: () => renderRoster(elements.viewRoot, state.snapshot.nationalPlanning, refreshIcons),
     evidence: renderEvidenceView,
     method: renderMethodView
   };
@@ -563,8 +566,22 @@ function exportSchoolsCsv(schools) {
   URL.revokeObjectURL(url);
 }
 
+function renderStoragePlanning() {
+  const storage = state.snapshot.storage;
+  if (!storage) return '';
+  const capacity = bytes => `${formatNumber(bytes/1e9,1)} GB`;
+  return `<section class="forecast-section" aria-label="Capacidad de almacenamiento"><header class="forecast-header"><div><h2>Almacenamiento y respaldo</h2><p>Proyección nacional completa y piloto completo; no son saldos pendientes. Esta referencia no cambia con los filtros del piloto.</p></div></header>
+    <p>Corpus disponible: <strong>${capacity(storage.currentBytes)}</strong>. Base de proyección: ${formatNumber(storage.sampleSchools)} escuelas con archivos vinculados.</p>
+    <div class="table-shell"><table class="data-table"><thead><tr><th>Escenario</th><th>Piloto primario</th><th>Piloto protegido</th><th>Nacional primario</th><th>Nacional protegido</th></tr></thead><tbody>${storage.scenarios.map(s=>`<tr><td>${escapeHtml(s.label)}</td><td>${capacity(s.pilotPrimaryBytes)}</td><td>${capacity(s.pilotProtectedBytes)}</td><td>${capacity(s.nationalPrimaryBytes)}</td><td>${capacity(s.nationalProtectedBytes)}</td></tr>`).join('')}</tbody></table></div>
+    <p>${escapeHtml(storage.scope)} Protegido = dos copias completas y 25% de holgura.</p></section>`;
+}
+
 function renderTimesView(schools) {
   const metrics = state.snapshot.metrics;
+  if (!metrics.schoolTime.n) {
+    elements.viewRoot.innerHTML = '<h1>Tiempo restante y equipos necesarios</h1><p>No hay sedes cerradas con duración positiva para estimar tiempos. No se interpreta la falta de medición como esfuerzo cero.</p>' + renderStoragePlanning();
+    return;
+  }
   const assumptions = state.snapshot.assumptions || {};
   const productiveHours = Number(assumptions.productiveHoursPerTeamDay || 6);
   const productiveDaysPerMonth = Number(assumptions.productiveDaysPerMonth || 22);
@@ -615,7 +632,8 @@ function renderTimesView(schools) {
       <div class="forecast-central"><div><span>Escenario central</span><strong id="national-central-hours">${formatHours(nationalCentral.adjustedHours)}</strong><small>Horas-equipo totales, con ${formatPercent(assumptions.contingencyRate * 100, 0)} de contingencia.</small></div><dl><div><dt>Con ${teamLabel(state.teamCount)}</dt><dd>${formatNumber(nationalDays, 1)} días efectivos</dd></div><div><dt>Duración equivalente</dt><dd>${formatNumber(nationalMonths, 1)} meses productivos</dd></div><div><dt>Equipo mínimo</dt><dd id="national-minimum-teams">${teamLabel(nationalMinimumTeams)}</dd></div></dl></div>
       <div class="scenario-grid">${scenarioCards(nationalScenarios, state.nationalTargetDays, true)}</div>
     </section>
-    <div class="notice planning-caveat">${icon('triangle-alert')}<span><strong>Estimación preliminar.</strong> Se basa en ${formatNumber(metrics.schoolTime.n)} escuelas cerradas de Capital y Central. Los tiempos son sesiones RUE; todavía no modelan traslados, ruralidad, conectividad ni tamaño del equipo.</span></div>
+    <div class="notice planning-caveat">${icon('triangle-alert')}<span><strong>Estimación preliminar.</strong> Se basa en ${formatNumber(metrics.schoolTime.n)} sedes cerradas con duración positiva de Capital y Central; ${formatNumber(metrics.closedWithoutPositiveTime || 0)} cerradas sin tiempo positivo no se interpretan como trabajo de duración cero. Los tiempos son sesiones RUE; todavía no modelan traslados, ruralidad, conectividad ni tamaño del equipo. La meta nacional cuenta códigos de local escolar, no sedes físicas conciliadas.</span></div>
+    ${renderStoragePlanning()}
     <section class="dashboard-grid equal">
       <article class="panel"><header class="panel-header"><div><h2>Distribución de tiempos</h2><p>Q1, mediana y Q3 en minutos; solo unidades cerradas.</p></div></header><div class="chart-wrap"><canvas id="time-distribution-chart" role="img" aria-label="Cuartiles de tiempo por escuela, bloque y aula"></canvas></div></article>
       <article class="panel"><header class="panel-header"><div><h2>Horas restantes</h2><p>Incluye 15% de contingencia.</p></div></header><div class="chart-wrap"><canvas id="scenario-chart" role="img" aria-label="Horas restantes en escenarios bajo, central y alto"></canvas></div></article>
@@ -729,7 +747,7 @@ function renderMethodView() {
       <article class="panel method-content">
         <section id="method-source"><h2>Fuente y corte</h2><p>La instantánea procede de la base analítica CIALPA_RUE_FOTOS.duckdb y fue actualizada el ${escapeHtml(formatDate(state.snapshot.databaseUpdatedAt, true))}. La muestra contiene ${formatNumber(metrics.physicalSites || metrics.schools)} sedes físicas y ${formatNumber(metrics.institutionCodes || metrics.pilotSchools)} códigos MEC. Al corte existen fichas RUE descargadas para ${formatNumber(metrics.ruePhysicalSites || 0)} sedes (${formatNumber(metrics.rueInstitutionCodes || 0)} códigos) y ${formatNumber(metrics.withoutRueRecord || 0)} sedes todavía no poseen una ficha extraída.</p></section>
         <section id="method-status"><h2>Estados</h2><p><strong>Cerrado en campo</strong> es avance definitivo. <strong>Guardado en campo</strong> representa carga iniciada que aún requiere cierre. <strong>Pendiente</strong> no posee cierre registrado. <strong>Sin ficha RUE extraída</strong> identifica una sede incluida en la muestra cuyos datos todavía no fueron descargados; no significa que esté fuera de la planificación.</p></section>
-        <section id="method-time"><h2>Tiempos observados</h2><p>Los eventos del RUE se agrupan en sesiones separadas por pausas de ${formatNumber(state.snapshot.assumptions.sessionGapMinutes)} minutos. Las estimaciones usan escuelas cerradas: escenario bajo Q1, central mediana y alto Q3. El saldo agrega ${formatPercent(state.snapshot.assumptions.contingencyRate * 100, 0)} por revisión y contingencias.</p><p>${escapeHtml(state.snapshot.assumptions.timeScope)}</p></section>
+        <section id="method-time"><h2>Tiempos observados</h2><p>Los eventos del RUE se agrupan en sesiones separadas por pausas de ${formatNumber(state.snapshot.assumptions.sessionGapMinutes)} minutos. Las estimaciones usan sedes cerradas con duración positiva: escenario bajo Q1, central mediana y alto Q3. Las duraciones no positivas no se interpretan como trabajo instantáneo. El saldo agrega ${formatPercent(state.snapshot.assumptions.contingencyRate * 100, 0)} por revisión y contingencias.</p><p>${escapeHtml(state.snapshot.assumptions.timeScope)}</p><p>La vista Matrícula y aulas tiene filtros propios sobre el padrón nacional. Conserva matrícula MEC y distingue aulas estimadas, declaradas y fichas cargadas. La extrapolación desde Capital/Central no es una medición nacional. La proyección de almacenamiento incluye dos copias y 25% de holgura; no informa una cuota de servidor verificada.</p></section>
         <section id="method-media"><h2>Evidencias</h2><p>La base maestra inventaría fotos, PDF y planos sin copiarlos al tablero. En las fotos directas, un OCR local lee el código MEC, la fecha, las coordenadas y el nombre impresos; el código relaciona la imagen con RUE y la distancia geográfica verifica la coincidencia. Los conflictos nunca reemplazan un vínculo controlado y quedan para revisión. La galería solicita cada archivo al backend únicamente después de validar la sesión.</p></section>
         <section id="method-update"><h2>Actualización</h2><p>Los registros y fotos de CIALPA Fotos se refrescan durante la sesión. El RUE y sus tiempos se actualizan cuando el equipo autorizado recompila la base maestra, genera una nueva instantánea sanitizada y publica una nueva versión.</p></section>
         <section id="method-security"><h2>Seguridad</h2><p>El repositorio público no contiene respuestas RUE, usuarios, cédulas, rutas privadas, enlaces de Drive, hashes ni binarios. El alcance de las evidencias lo decide Apps Script: administrador para todo el archivo; supervisor y encuestador para los registros permitidos por su equipo.</p></section>
