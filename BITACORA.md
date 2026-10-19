@@ -14,6 +14,9 @@
 - Pruebas locales: cinco tests del exportador, validación estática y Playwright con 15 aprobadas y una omisión intencional (control móvil no aplicable a escritorio); escritorio y Pixel 7. Inspección visual de padrón y planificación. Las evidencias privadas se simulan: no equivalen a consulta autenticada real.
 - Dependencias de la carpeta sincronizada incompletas: npm run check ejecutado sobre copia local con npm ci y lockfile sin cambios de dependencias; servidor sirvió los archivos actuales de esta raíz. Fallo inicial del comando Playwright local documentado, no atribuido al código nuevo.
 - Informe Word generado en el entorno privado, con el mismo corte e indicadores; validación de paginación en curso. Publicación y comprobación final pendientes al preparar este commit.
+- Cierre: commit funcional a0e85c6 publicado en production/main. Workflows 39248769843 y 39248768236 finalizados con éxito. URL operativa comprobada en 1.10.0, esquema 2026-10-19.1 y corte RUE 2026-10-17.
+- Smoke público en escritorio y Pixel 7: padrón de 5448 locales, filtro piloto de 86 códigos, escenario central nacional 42742,2 h y 33 equipos; cero errores de página y sin desbordamiento horizontal. Prueba en modo de demostración claramente marcado; no valida una sesión real de acceso a fotos privadas. El backend no se modificó; una consulta de salud no terminó en un plazo operativo y no se toma como evidencia de disponibilidad.
+- Word: contenido contrastado con la instantánea y el Excel; cinco páginas con seis tablas revisadas visualmente mediante docx-preview/Chromium local. Microsoft Word abrió una copia, pero se bloqueó al exportar PDF; la paginación nativa no quedó verificada. No se entrega un PDF no validado ni se sobrescriben informes anteriores.
 
 ## 2026-10-17 - Actualización de los cinco perfiles y conservación histórica
 
